@@ -9,6 +9,7 @@
 //!   cargo run --example address_probe
 //! (defaults to /run/vpp/core-api.sock)
 
+use vpp_api::generated::dhcp::*;
 use vpp_api::generated::interface::*;
 use vpp_api::generated::ip::*;
 use vpp_api::generated::vpe::*;
@@ -40,6 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "delete_loopback_f9e6675e",
         "create_vlan_subif_af34ac8b",
         "delete_subif_f9e6675e",
+        "dhcp_client_config_1af013ea",
+        "dhcp6_client_enable_disable_ae6cfcfb",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -180,7 +183,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             prefix: prefix_v6,
         })
         .await?;
-    println!("Deleting loopback via delete_loopback...");
+    // DHCPv6 enable/disable round-trip — safe on a loopback; VPP
+    // just configures the state without emitting wire traffic.
+    println!("\nRound-tripping dhcp6_client_enable_disable...");
+    let re: Dhcp6ClientEnableDisableReply = client
+        .request(Dhcp6ClientEnableDisable {
+            sw_if_index,
+            enable: true,
+        })
+        .await?;
+    println!("  enable retval = {}", re.retval);
+    let re: Dhcp6ClientEnableDisableReply = client
+        .request(Dhcp6ClientEnableDisable {
+            sw_if_index,
+            enable: false,
+        })
+        .await?;
+    println!("  disable retval = {}", re.retval);
+
+    println!("\nDeleting loopback via delete_loopback...");
     let del: DeleteLoopbackReply = client.request(DeleteLoopback { sw_if_index }).await?;
     assert_eq!(del.retval, 0, "delete_loopback failed");
 

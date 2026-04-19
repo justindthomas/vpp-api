@@ -15,3 +15,4 @@ pub mod interface;
 pub mod ip;
 pub mod ip_neighbor;
 pub mod punt;
+pub mod dhcp;
