@@ -315,3 +315,185 @@ impl VppMessage for SwInterfaceSetFlagsReply {
         Ok(SwInterfaceSetFlagsReply { retval })
     }
 }
+
+/// Add or remove an IPv4/IPv6 address on an interface.
+///
+/// Wire layout (after 10-byte request header):
+///   sw_if_index: u32 (interface_index alias)
+///   is_add: bool (u8)
+///   del_all: bool (u8)
+///   prefix: address_with_prefix_t = af(u8) + address(16) + len(u8) = 18 bytes
+#[derive(Debug, Clone)]
+pub struct SwInterfaceAddDelAddress {
+    pub sw_if_index: u32,
+    pub is_add: bool,
+    pub del_all: bool,
+    pub prefix: crate::generated::ip::Prefix,
+}
+
+impl VppMessage for SwInterfaceAddDelAddress {
+    const NAME: &'static str = "sw_interface_add_del_address";
+    const CRC: &'static str = "5463d73b";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u8(buf, self.is_add as u8);
+        put_u8(buf, self.del_all as u8);
+        self.prefix.encode(buf);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sw_interface_add_del_address is send-only".into()))
+    }
+}
+
+/// Reply to sw_interface_add_del_address.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceAddDelAddressReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SwInterfaceAddDelAddressReply {
+    const NAME: &'static str = "sw_interface_add_del_address_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SwInterfaceAddDelAddressReply { retval })
+    }
+}
+
+/// Set an interface's MTU. The `mtu` field is a 4-element array
+/// indexed by vnet_mtu_t: [L3, IP4, IP6, MPLS]. Set all four to the
+/// same value to behave like the `set interface mtu packet N <if>` CLI;
+/// or set individual slots to tune per-proto MTU.
+///
+/// Wire layout (after 10-byte request header):
+///   sw_if_index: u32
+///   mtu: [u32; 4]
+#[derive(Debug, Clone)]
+pub struct SwInterfaceSetMtu {
+    pub sw_if_index: u32,
+    pub mtu: [u32; 4],
+}
+
+impl SwInterfaceSetMtu {
+    /// Convenience: set all four MTU slots to the same value (matches
+    /// VPP's `set interface mtu packet N <if>` CLI).
+    pub fn packet(sw_if_index: u32, mtu: u32) -> Self {
+        Self {
+            sw_if_index,
+            mtu: [mtu; 4],
+        }
+    }
+}
+
+impl VppMessage for SwInterfaceSetMtu {
+    const NAME: &'static str = "sw_interface_set_mtu";
+    const CRC: &'static str = "5cbe85e5";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        for m in &self.mtu {
+            put_u32(buf, *m);
+        }
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sw_interface_set_mtu is send-only".into()))
+    }
+}
+
+/// Reply to sw_interface_set_mtu.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceSetMtuReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SwInterfaceSetMtuReply {
+    const NAME: &'static str = "sw_interface_set_mtu_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SwInterfaceSetMtuReply { retval })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generated::ip::Prefix;
+
+    #[test]
+    fn test_add_del_address_encode_ipv4() {
+        let msg = SwInterfaceAddDelAddress {
+            sw_if_index: 3,
+            is_add: true,
+            del_all: false,
+            prefix: Prefix::ipv4([192, 168, 1, 1], 24),
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        // 4 (sw_if_index) + 1 (is_add) + 1 (del_all) + 18 (prefix) = 24
+        assert_eq!(buf.len(), 24);
+        assert_eq!(&buf[0..4], &3u32.to_be_bytes());
+        assert_eq!(buf[4], 1); // is_add
+        assert_eq!(buf[5], 0); // del_all
+        assert_eq!(buf[6], 0); // af = v4
+        assert_eq!(&buf[7..11], &[192, 168, 1, 1]);
+        assert_eq!(buf[23], 24); // len
+    }
+
+    #[test]
+    fn test_add_del_address_encode_ipv6() {
+        let addr = [
+            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01,
+        ];
+        let msg = SwInterfaceAddDelAddress {
+            sw_if_index: 5,
+            is_add: false,
+            del_all: false,
+            prefix: Prefix::ipv6(addr, 64),
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        assert_eq!(buf.len(), 24);
+        assert_eq!(buf[4], 0); // is_add=false
+        assert_eq!(buf[6], 1); // af = v6
+        assert_eq!(&buf[7..23], &addr);
+        assert_eq!(buf[23], 64);
+    }
+
+    #[test]
+    fn test_set_mtu_encode() {
+        let msg = SwInterfaceSetMtu::packet(7, 9000);
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        // 4 (sw_if_index) + 4*4 (mtu array) = 20
+        assert_eq!(buf.len(), 20);
+        assert_eq!(&buf[0..4], &7u32.to_be_bytes());
+        for slot in 0..4 {
+            assert_eq!(
+                &buf[4 + slot * 4..4 + (slot + 1) * 4],
+                &9000u32.to_be_bytes()
+            );
+        }
+    }
+
+    #[test]
+    fn test_reply_decode() {
+        let buf = 0i32.to_be_bytes();
+        let r = SwInterfaceAddDelAddressReply::decode_fields(&buf).unwrap();
+        assert_eq!(r.retval, 0);
+        let buf = (-13i32).to_be_bytes();
+        let r = SwInterfaceSetMtuReply::decode_fields(&buf).unwrap();
+        assert_eq!(r.retval, -13);
+    }
+}

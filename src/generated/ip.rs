@@ -453,6 +453,53 @@ impl VppMessage for IpAddressDetails {
     }
 }
 
+/// Enable or disable IPv6 processing on an interface (drives RA/SLAAC,
+/// link-local generation, etc).
+///
+/// Wire layout (after 10-byte request header):
+///   sw_if_index: u32
+///   enable: bool (u8)
+#[derive(Debug, Clone)]
+pub struct SwInterfaceIp6EnableDisable {
+    pub sw_if_index: u32,
+    pub enable: bool,
+}
+
+impl VppMessage for SwInterfaceIp6EnableDisable {
+    const NAME: &'static str = "sw_interface_ip6_enable_disable";
+    const CRC: &'static str = "ae6cfcfb";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u8(buf, self.enable as u8);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode(
+            "sw_interface_ip6_enable_disable is send-only".into(),
+        ))
+    }
+}
+
+/// Reply to sw_interface_ip6_enable_disable.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceIp6EnableDisableReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SwInterfaceIp6EnableDisableReply {
+    const NAME: &'static str = "sw_interface_ip6_enable_disable_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SwInterfaceIp6EnableDisableReply { retval })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,5 +542,34 @@ mod tests {
         msg.encode_fields(&mut buf);
         // Should encode without panic; exact length depends on FibPath encoding
         assert!(!buf.is_empty());
+    }
+
+    #[test]
+    fn test_sw_interface_ip6_enable_disable_encode() {
+        let msg = SwInterfaceIp6EnableDisable {
+            sw_if_index: 4,
+            enable: true,
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        // 4 (sw_if_index) + 1 (enable) = 5
+        assert_eq!(buf.len(), 5);
+        assert_eq!(&buf[0..4], &4u32.to_be_bytes());
+        assert_eq!(buf[4], 1);
+
+        let disable = SwInterfaceIp6EnableDisable {
+            sw_if_index: 4,
+            enable: false,
+        };
+        let mut buf = Vec::new();
+        disable.encode_fields(&mut buf);
+        assert_eq!(buf[4], 0);
+    }
+
+    #[test]
+    fn test_sw_interface_ip6_enable_disable_reply_decode() {
+        let buf = 0i32.to_be_bytes();
+        let r = SwInterfaceIp6EnableDisableReply::decode_fields(&buf).unwrap();
+        assert_eq!(r.retval, 0);
     }
 }
