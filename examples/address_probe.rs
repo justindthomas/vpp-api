@@ -12,6 +12,7 @@
 use vpp_api::generated::dhcp::*;
 use vpp_api::generated::interface::*;
 use vpp_api::generated::ip::*;
+use vpp_api::generated::lcp::*;
 use vpp_api::generated::vpe::*;
 use vpp_api::VppClient;
 
@@ -43,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "delete_subif_f9e6675e",
         "dhcp_client_config_1af013ea",
         "dhcp6_client_enable_disable_ae6cfcfb",
+        "lcp_itf_pair_add_del_40482b80",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -183,6 +185,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             prefix: prefix_v6,
         })
         .await?;
+    // LCP pair round-trip — creates a Linux TAP mirroring the
+    // loopback. Skip if the linux_cp plugin isn't loaded (VPP will
+    // return a negative retval like -7).
+    println!("\nRound-tripping lcp_itf_pair_add_del...");
+    let lr: LcpItfPairAddDelReply = client
+        .request(LcpItfPairAddDel::add_tap(sw_if_index, "probe-lo99"))
+        .await?;
+    println!("  add retval = {}", lr.retval);
+    if lr.retval == 0 {
+        let lr: LcpItfPairAddDelReply = client
+            .request(LcpItfPairAddDel::del(sw_if_index))
+            .await?;
+        println!("  del retval = {}", lr.retval);
+    } else {
+        println!("  (linux_cp plugin may not be loaded; skipping del)");
+    }
+
     // DHCPv6 enable/disable round-trip — safe on a loopback; VPP
     // just configures the state without emitting wire traffic.
     println!("\nRound-tripping dhcp6_client_enable_disable...");
