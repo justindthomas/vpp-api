@@ -12,6 +12,7 @@
 use vpp_api::generated::dhcp::*;
 use vpp_api::generated::interface::*;
 use vpp_api::generated::ip::*;
+use vpp_api::generated::l2::*;
 use vpp_api::generated::lcp::*;
 use vpp_api::generated::vpe::*;
 use vpp_api::VppClient;
@@ -45,6 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "dhcp_client_config_1af013ea",
         "dhcp6_client_enable_disable_ae6cfcfb",
         "lcp_itf_pair_add_del_40482b80",
+        "bridge_domain_add_del_v2_600b7170",
+        "sw_interface_set_l2_bridge_d0678b13",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -223,6 +226,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nDeleting loopback via delete_loopback...");
     let del: DeleteLoopbackReply = client.request(DeleteLoopback { sw_if_index }).await?;
     assert_eq!(del.retval, 0, "delete_loopback failed");
+
+    // Bridge domain + BVI round-trip — create BD, attach a fresh
+    // loopback as the BVI, detach, destroy.
+    println!("\nRound-tripping bridge_domain_add_del_v2 + sw_interface_set_l2_bridge...");
+    let bvi: CreateLoopbackReply = client
+        .request(CreateLoopback {
+            mac_address: [0; 6],
+        })
+        .await?;
+    assert_eq!(bvi.retval, 0);
+    let bd: BridgeDomainAddDelV2Reply = client
+        .request(BridgeDomainAddDelV2::add(999))
+        .await?;
+    println!(
+        "  bridge_domain_add_del_v2 retval={} bd_id={}",
+        bd.retval, bd.bd_id
+    );
+    assert_eq!(bd.retval, 0);
+    let attach: SwInterfaceSetL2BridgeReply = client
+        .request(SwInterfaceSetL2Bridge::attach_bvi(bvi.sw_if_index, bd.bd_id))
+        .await?;
+    println!("  attach BVI retval={}", attach.retval);
+    assert_eq!(attach.retval, 0);
+    let detach: SwInterfaceSetL2BridgeReply = client
+        .request(SwInterfaceSetL2Bridge::detach(bvi.sw_if_index))
+        .await?;
+    println!("  detach retval={}", detach.retval);
+    let del_bd: BridgeDomainAddDelV2Reply = client
+        .request(BridgeDomainAddDelV2::del(bd.bd_id))
+        .await?;
+    println!("  bridge_domain del retval={}", del_bd.retval);
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: bvi.sw_if_index,
+        })
+        .await?;
 
     // Quick round-trip on create_vlan_subif / delete_subif using a
     // fresh parent loopback (VLAN sub-interfaces are valid on
