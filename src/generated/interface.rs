@@ -426,6 +426,300 @@ impl VppMessage for SwInterfaceSetMtuReply {
     }
 }
 
+/// Create a loopback interface.
+///
+/// `mac_address` all-zero = VPP picks a MAC.
+#[derive(Debug, Clone, Default)]
+pub struct CreateLoopback {
+    pub mac_address: [u8; 6],
+}
+
+impl VppMessage for CreateLoopback {
+    const NAME: &'static str = "create_loopback";
+    const CRC: &'static str = "42bb5d22";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_bytes(buf, &self.mac_address);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("create_loopback is send-only".into()))
+    }
+}
+
+/// Create a loopback interface with an explicit instance number
+/// (controls the `loopN` name that shows up in VPP).
+#[derive(Debug, Clone)]
+pub struct CreateLoopbackInstance {
+    pub mac_address: [u8; 6],
+    /// If false VPP picks the instance (user_instance ignored).
+    pub is_specified: bool,
+    pub user_instance: u32,
+}
+
+impl CreateLoopbackInstance {
+    pub fn instance(n: u32) -> Self {
+        Self {
+            mac_address: [0; 6],
+            is_specified: true,
+            user_instance: n,
+        }
+    }
+}
+
+impl VppMessage for CreateLoopbackInstance {
+    const NAME: &'static str = "create_loopback_instance";
+    const CRC: &'static str = "d36a3ee2";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_bytes(buf, &self.mac_address);
+        put_u8(buf, self.is_specified as u8);
+        put_u32(buf, self.user_instance);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode(
+            "create_loopback_instance is send-only".into(),
+        ))
+    }
+}
+
+/// Reply carrying the newly-allocated sw_if_index. Used by both
+/// `create_loopback_reply` and `create_loopback_instance_reply`
+/// (identical wire format, distinct message names).
+#[derive(Debug, Clone)]
+pub struct CreateLoopbackReply {
+    pub retval: i32,
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for CreateLoopbackReply {
+    const NAME: &'static str = "create_loopback_reply";
+    const CRC: &'static str = "5383d31f";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let sw_if_index = get_u32(buf, &mut off)?;
+        Ok(CreateLoopbackReply {
+            retval,
+            sw_if_index,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateLoopbackInstanceReply {
+    pub retval: i32,
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for CreateLoopbackInstanceReply {
+    const NAME: &'static str = "create_loopback_instance_reply";
+    const CRC: &'static str = "5383d31f";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let sw_if_index = get_u32(buf, &mut off)?;
+        Ok(CreateLoopbackInstanceReply {
+            retval,
+            sw_if_index,
+        })
+    }
+}
+
+/// Delete a loopback interface.
+#[derive(Debug, Clone)]
+pub struct DeleteLoopback {
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for DeleteLoopback {
+    const NAME: &'static str = "delete_loopback";
+    const CRC: &'static str = "f9e6675e";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("delete_loopback is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteLoopbackReply {
+    pub retval: i32,
+}
+
+impl VppMessage for DeleteLoopbackReply {
+    const NAME: &'static str = "delete_loopback_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(DeleteLoopbackReply { retval })
+    }
+}
+
+/// sub-interface flags bitfield. Encoded as u32 on the wire.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SubIfFlags(pub u32);
+
+impl SubIfFlags {
+    pub const NO_TAGS: u32 = 1;
+    pub const ONE_TAG: u32 = 2;
+    pub const TWO_TAGS: u32 = 4;
+    pub const DOT1AD: u32 = 8;
+    pub const EXACT_MATCH: u32 = 16;
+    pub const DEFAULT: u32 = 32;
+    pub const OUTER_VLAN_ID_ANY: u32 = 64;
+    pub const INNER_VLAN_ID_ANY: u32 = 128;
+}
+
+/// Create a trivial 802.1Q sub-interface (one tag, exact match on
+/// vlan_id). For QinQ / dot1ad, use `create_subif` instead.
+#[derive(Debug, Clone)]
+pub struct CreateVlanSubif {
+    pub sw_if_index: u32,
+    pub vlan_id: u32,
+}
+
+impl VppMessage for CreateVlanSubif {
+    const NAME: &'static str = "create_vlan_subif";
+    const CRC: &'static str = "af34ac8b";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u32(buf, self.vlan_id);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("create_vlan_subif is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateVlanSubifReply {
+    pub retval: i32,
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for CreateVlanSubifReply {
+    const NAME: &'static str = "create_vlan_subif_reply";
+    const CRC: &'static str = "5383d31f";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let sw_if_index = get_u32(buf, &mut off)?;
+        Ok(CreateVlanSubifReply {
+            retval,
+            sw_if_index,
+        })
+    }
+}
+
+/// General-purpose sub-interface create. Supports QinQ (two-tag) and
+/// dot1ad via `sub_if_flags`.
+#[derive(Debug, Clone)]
+pub struct CreateSubif {
+    pub sw_if_index: u32,
+    pub sub_id: u32,
+    pub sub_if_flags: SubIfFlags,
+    pub outer_vlan_id: u16,
+    pub inner_vlan_id: u16,
+}
+
+impl VppMessage for CreateSubif {
+    const NAME: &'static str = "create_subif";
+    const CRC: &'static str = "790ca755";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u32(buf, self.sub_id);
+        put_u32(buf, self.sub_if_flags.0);
+        put_u16(buf, self.outer_vlan_id);
+        put_u16(buf, self.inner_vlan_id);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("create_subif is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateSubifReply {
+    pub retval: i32,
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for CreateSubifReply {
+    const NAME: &'static str = "create_subif_reply";
+    const CRC: &'static str = "5383d31f";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let sw_if_index = get_u32(buf, &mut off)?;
+        Ok(CreateSubifReply {
+            retval,
+            sw_if_index,
+        })
+    }
+}
+
+/// Delete a sub-interface. Also usable to delete a loopback (same
+/// wire shape, different message name) — use `DeleteLoopback`
+/// instead for clarity.
+#[derive(Debug, Clone)]
+pub struct DeleteSubif {
+    pub sw_if_index: u32,
+}
+
+impl VppMessage for DeleteSubif {
+    const NAME: &'static str = "delete_subif";
+    const CRC: &'static str = "f9e6675e";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("delete_subif is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeleteSubifReply {
+    pub retval: i32,
+}
+
+impl VppMessage for DeleteSubifReply {
+    const NAME: &'static str = "delete_subif_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(DeleteSubifReply { retval })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,5 +789,78 @@ mod tests {
         let buf = (-13i32).to_be_bytes();
         let r = SwInterfaceSetMtuReply::decode_fields(&buf).unwrap();
         assert_eq!(r.retval, -13);
+    }
+
+    #[test]
+    fn test_create_loopback_encode() {
+        let msg = CreateLoopback {
+            mac_address: [0x02, 0, 0, 0, 0, 0x01],
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        assert_eq!(buf, vec![0x02, 0, 0, 0, 0, 0x01]);
+    }
+
+    #[test]
+    fn test_create_loopback_instance_encode() {
+        let msg = CreateLoopbackInstance::instance(42);
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        // 6 (mac) + 1 (is_specified) + 4 (user_instance) = 11
+        assert_eq!(buf.len(), 11);
+        assert_eq!(&buf[0..6], &[0u8; 6]);
+        assert_eq!(buf[6], 1);
+        assert_eq!(&buf[7..11], &42u32.to_be_bytes());
+    }
+
+    #[test]
+    fn test_create_loopback_reply_decode() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0i32.to_be_bytes());
+        buf.extend_from_slice(&7u32.to_be_bytes());
+        let r = CreateLoopbackReply::decode_fields(&buf).unwrap();
+        assert_eq!(r.retval, 0);
+        assert_eq!(r.sw_if_index, 7);
+    }
+
+    #[test]
+    fn test_create_vlan_subif_encode() {
+        let msg = CreateVlanSubif {
+            sw_if_index: 3,
+            vlan_id: 100,
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        assert_eq!(buf.len(), 8);
+        assert_eq!(&buf[0..4], &3u32.to_be_bytes());
+        assert_eq!(&buf[4..8], &100u32.to_be_bytes());
+    }
+
+    #[test]
+    fn test_create_subif_encode_qinq() {
+        let msg = CreateSubif {
+            sw_if_index: 5,
+            sub_id: 100,
+            sub_if_flags: SubIfFlags(SubIfFlags::TWO_TAGS | SubIfFlags::EXACT_MATCH),
+            outer_vlan_id: 100,
+            inner_vlan_id: 200,
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        // 4 + 4 + 4 + 2 + 2 = 16
+        assert_eq!(buf.len(), 16);
+        assert_eq!(&buf[0..4], &5u32.to_be_bytes());
+        assert_eq!(&buf[4..8], &100u32.to_be_bytes());
+        assert_eq!(&buf[8..12], &(4u32 | 16).to_be_bytes());
+        assert_eq!(&buf[12..14], &100u16.to_be_bytes());
+        assert_eq!(&buf[14..16], &200u16.to_be_bytes());
+    }
+
+    #[test]
+    fn test_delete_subif_encode() {
+        let msg = DeleteSubif { sw_if_index: 9 };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        assert_eq!(buf, 9u32.to_be_bytes());
     }
 }

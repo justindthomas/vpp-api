@@ -14,20 +14,6 @@ use vpp_api::generated::ip::*;
 use vpp_api::generated::vpe::*;
 use vpp_api::VppClient;
 
-async fn cli(client: &VppClient, cmd: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Use vppctl socket via CliInband — but we don't have that message
-    // yet, so we'll use a side-channel: tokio's Command to invoke
-    // vppctl. Just for setup/cleanup of the scratch loopback.
-    let out = tokio::process::Command::new("vppctl")
-        .arg("-s")
-        .arg("/run/vpp/core-cli.sock")
-        .arg(cmd)
-        .output()
-        .await?;
-    let _ = client; // keep signature symmetric
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -50,6 +36,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "sw_interface_add_del_address_5463d73b",
         "sw_interface_set_mtu_5cbe85e5",
         "sw_interface_ip6_enable_disable_ae6cfcfb",
+        "create_loopback_instance_d36a3ee2",
+        "delete_loopback_f9e6675e",
+        "create_vlan_subif_af34ac8b",
+        "delete_subif_f9e6675e",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -61,28 +51,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Set up a scratch loopback for the test. Use instance 99 to
-    // avoid colliding with real config.
-    println!("\nCreating loopback instance 99 via vppctl...");
-    let out = cli(&client, "create loopback interface instance 99").await?;
-    let name = out.trim().to_string();
-    if name.is_empty() {
-        eprintln!("failed to create loopback (vppctl returned nothing)");
-        std::process::exit(3);
-    }
-    println!("  Created {}", name);
+    // avoid colliding with real config. Now via binary API instead
+    // of vppctl.
+    println!("\nCreating loopback instance 99 via create_loopback_instance...");
+    let reply: CreateLoopbackInstanceReply = client
+        .request(CreateLoopbackInstance::instance(99))
+        .await?;
+    assert_eq!(reply.retval, 0, "create_loopback_instance failed");
+    let sw_if_index = reply.sw_if_index;
+    println!("  sw_if_index = {}", sw_if_index);
 
-    let _ = cli(&client, &format!("set interface state {} up", name)).await?;
+    // Bring it admin-up so addresses stick.
+    let up: SwInterfaceSetFlagsReply = client
+        .request(SwInterfaceSetFlags {
+            sw_if_index,
+            flags: IfStatusFlags(IfStatusFlags::ADMIN_UP),
+        })
+        .await?;
+    assert_eq!(up.retval, 0);
 
-    // Find its sw_if_index via a fresh dump.
+    // Find its name for pretty-printing.
     let interfaces = client
         .dump::<SwInterfaceDump, SwInterfaceDetails>(SwInterfaceDump::default())
         .await?;
-    let sw_if_index = interfaces
+    let name = interfaces
         .iter()
-        .find(|i| i.interface_name == name)
-        .map(|i| i.sw_if_index)
-        .ok_or("loopback not found in dump")?;
-    println!("  sw_if_index = {}", sw_if_index);
+        .find(|i| i.sw_if_index == sw_if_index)
+        .map(|i| i.interface_name.clone())
+        .unwrap_or_else(|| format!("sw_if_index:{}", sw_if_index));
+    println!("  name = {}", name);
 
     // --- sw_interface_add_del_address IPv4 ---
     println!("\nAdding 203.0.113.9/32...");
@@ -183,8 +180,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             prefix: prefix_v6,
         })
         .await?;
-    println!("Deleting loopback...");
-    let _ = cli(&client, &format!("delete loopback interface intfc {}", name)).await?;
+    println!("Deleting loopback via delete_loopback...");
+    let del: DeleteLoopbackReply = client.request(DeleteLoopback { sw_if_index }).await?;
+    assert_eq!(del.retval, 0, "delete_loopback failed");
+
+    // Quick round-trip on create_vlan_subif / delete_subif using a
+    // fresh parent loopback (VLAN sub-interfaces are valid on
+    // loopbacks).
+    println!("\nRound-tripping create_vlan_subif / delete_subif on a scratch loopback...");
+    let parent: CreateLoopbackReply = client
+        .request(CreateLoopback {
+            mac_address: [0; 6],
+        })
+        .await?;
+    assert_eq!(parent.retval, 0);
+    let sub: CreateVlanSubifReply = client
+        .request(CreateVlanSubif {
+            sw_if_index: parent.sw_if_index,
+            vlan_id: 777,
+        })
+        .await?;
+    assert_eq!(sub.retval, 0, "create_vlan_subif failed");
+    println!("  parent sw_if_index={}  subif sw_if_index={}", parent.sw_if_index, sub.sw_if_index);
+    let ds: DeleteSubifReply = client
+        .request(DeleteSubif {
+            sw_if_index: sub.sw_if_index,
+        })
+        .await?;
+    assert_eq!(ds.retval, 0, "delete_subif failed");
+    let dp: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: parent.sw_if_index,
+        })
+        .await?;
+    assert_eq!(dp.retval, 0);
 
     // Final control_ping to ensure connection is still healthy.
     let ping: ControlPingReply = client.request(ControlPing).await?;
