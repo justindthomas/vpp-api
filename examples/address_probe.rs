@@ -51,6 +51,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "sw_interface_set_l2_bridge_d0678b13",
         "sfw_enable_disable_3865946c",
         "sfw_zone_interface_add_del_66c8cf1c",
+        "sfw_policy_add_del_bb931f93",
+        "sfw_policy_rule_add_del_2fa9c963",
+        "sfw_nat_pool_add_del_104621ad",
+        "sfw_nat_static_add_del_1ea19567",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -297,8 +301,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     assert_eq!(dp.retval, 0);
 
-    // SFW plugin: round-trip sfw_zone_interface_add_del on a scratch
-    // loopback. Requires the sfw plugin to be loaded.
+    // SFW plugin: round-trip the full mutation API — zone attach,
+    // policy create, rule add+del, policy delete, NAT pool, NAT
+    // static. Requires the sfw plugin to be loaded.
     println!("\nRound-tripping sfw_zone_interface_add_del...");
     let lb: CreateLoopbackReply = client
         .request(CreateLoopback { mac_address: [0; 6] })
@@ -311,15 +316,110 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             zone_name: "probe-zone".to_string(),
         })
         .await?;
-    println!("  add retval = {}", add.retval);
-    let del: SfwZoneInterfaceAddDelReply = client
+    println!("  zone add retval = {}", add.retval);
+    // Add a second zone so we have a zone-pair to hang a policy on.
+    let _: SfwZoneInterfaceAddDelReply = client
+        .request(SfwZoneInterfaceAddDel {
+            is_add: true,
+            sw_if_index: lb.sw_if_index,
+            zone_name: "probe-peer".to_string(),
+        })
+        .await?;
+
+    println!("\nRound-tripping sfw_policy_add_del...");
+    let pol: SfwPolicyAddDelReply = client
+        .request(SfwPolicyAddDel {
+            is_add: true,
+            policy_name: "probe-pol".to_string(),
+            from_zone: "probe-zone".to_string(),
+            to_zone: "probe-peer".to_string(),
+            default_action: SfwAction::Deny,
+            implicit_icmpv6: true,
+        })
+        .await?;
+    println!("  create retval = {}", pol.retval);
+    assert_eq!(pol.retval, 0, "policy create");
+
+    println!("\nRound-tripping sfw_policy_rule_add_del...");
+    let rule_add: SfwPolicyRuleAddDelReply = client
+        .request(SfwPolicyRuleAddDel::any(
+            "probe-pol",
+            0,
+            SfwAction::Permit,
+        ))
+        .await?;
+    println!("  rule add retval = {}", rule_add.retval);
+    let rule_del: SfwPolicyRuleAddDelReply = client
+        .request(SfwPolicyRuleAddDel::del("probe-pol", 0))
+        .await?;
+    println!("  rule del retval = {}", rule_del.retval);
+
+    let pol_del: SfwPolicyAddDelReply = client
+        .request(SfwPolicyAddDel {
+            is_add: false,
+            policy_name: "probe-pol".to_string(),
+            from_zone: String::new(),
+            to_zone: String::new(),
+            default_action: SfwAction::Deny,
+            implicit_icmpv6: false,
+        })
+        .await?;
+    println!("  policy del retval = {}", pol_del.retval);
+
+    println!("\nRound-tripping sfw_nat_pool_add_del...");
+    let pool_add: SfwNatPoolAddDelReply = client
+        .request(SfwNatPoolAddDel {
+            is_add: true,
+            external_prefix: Prefix::ipv4([203, 0, 113, 0], 28),
+            internal_prefix: Prefix::ipv4([10, 77, 0, 0], 24),
+            mode: SfwNatMode::Dynamic,
+        })
+        .await?;
+    println!("  pool add retval = {}", pool_add.retval);
+    assert_eq!(pool_add.retval, 0, "pool add");
+    let pool_del: SfwNatPoolAddDelReply = client
+        .request(SfwNatPoolAddDel {
+            is_add: false,
+            external_prefix: Prefix::ipv4([203, 0, 113, 0], 28),
+            internal_prefix: Prefix::ipv4([10, 77, 0, 0], 24),
+            mode: SfwNatMode::Dynamic,
+        })
+        .await?;
+    println!("  pool del retval = {}", pool_del.retval);
+
+    println!("\nRound-tripping sfw_nat_static_add_del...");
+    let st_add: SfwNatStaticAddDelReply = client
+        .request(SfwNatStaticAddDel::one_to_one_ipv4(
+            [198, 51, 100, 1],
+            [192, 168, 100, 1],
+            true,
+        ))
+        .await?;
+    println!("  static add retval = {}", st_add.retval);
+    let st_del: SfwNatStaticAddDelReply = client
+        .request(SfwNatStaticAddDel::one_to_one_ipv4(
+            [198, 51, 100, 1],
+            [192, 168, 100, 1],
+            false,
+        ))
+        .await?;
+    println!("  static del retval = {}", st_del.retval);
+
+    // Clean up the zone attachments + scratch loopback.
+    let _: SfwZoneInterfaceAddDelReply = client
         .request(SfwZoneInterfaceAddDel {
             is_add: false,
             sw_if_index: lb.sw_if_index,
             zone_name: "probe-zone".to_string(),
         })
         .await?;
-    println!("  del retval = {}", del.retval);
+    let _: SfwZoneInterfaceAddDelReply = client
+        .request(SfwZoneInterfaceAddDel {
+            is_add: false,
+            sw_if_index: lb.sw_if_index,
+            zone_name: "probe-peer".to_string(),
+        })
+        .await?;
     let _: DeleteLoopbackReply = client
         .request(DeleteLoopback {
             sw_if_index: lb.sw_if_index,

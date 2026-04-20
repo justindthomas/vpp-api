@@ -1,5 +1,102 @@
 {
-    "types": [],
+    "types": [
+        [
+            "address",
+            [
+                "vl_api_address_family_t",
+                "af"
+            ],
+            [
+                "vl_api_address_union_t",
+                "un"
+            ]
+        ],
+        [
+            "prefix",
+            [
+                "vl_api_address_t",
+                "address"
+            ],
+            [
+                "u8",
+                "len"
+            ]
+        ],
+        [
+            "ip4_address_and_mask",
+            [
+                "vl_api_ip4_address_t",
+                "addr"
+            ],
+            [
+                "vl_api_ip4_address_t",
+                "mask"
+            ]
+        ],
+        [
+            "ip6_address_and_mask",
+            [
+                "vl_api_ip6_address_t",
+                "addr"
+            ],
+            [
+                "vl_api_ip6_address_t",
+                "mask"
+            ]
+        ],
+        [
+            "mprefix",
+            [
+                "vl_api_address_family_t",
+                "af"
+            ],
+            [
+                "u16",
+                "grp_address_length"
+            ],
+            [
+                "vl_api_address_union_t",
+                "grp_address"
+            ],
+            [
+                "vl_api_address_union_t",
+                "src_address"
+            ]
+        ],
+        [
+            "ip6_prefix",
+            [
+                "vl_api_ip6_address_t",
+                "address"
+            ],
+            [
+                "u8",
+                "len"
+            ]
+        ],
+        [
+            "ip4_prefix",
+            [
+                "vl_api_ip4_address_t",
+                "address"
+            ],
+            [
+                "u8",
+                "len"
+            ]
+        ],
+        [
+            "prefix_matcher",
+            [
+                "u8",
+                "le"
+            ],
+            [
+                "u8",
+                "ge"
+            ]
+        ]
+    ],
     "messages": [
         [
             "sfw_enable_disable",
@@ -103,9 +200,301 @@
                 "crc": "0xe8d4e804",
                 "options": {}
             }
+        ],
+        [
+            "sfw_policy_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "string",
+                "policy_name",
+                64
+            ],
+            [
+                "string",
+                "from_zone",
+                32
+            ],
+            [
+                "string",
+                "to_zone",
+                32
+            ],
+            [
+                "u8",
+                "default_action"
+            ],
+            [
+                "bool",
+                "implicit_icmpv6"
+            ],
+            {
+                "crc": "0xbb931f93",
+                "options": {},
+                "comment": "/** Create or delete a policy.\n *\n * On is_add=true: creates a new policy with the given zones and\n * default action. The policy is wired into the zone-pair table\n * and the feature arc is enabled on every interface already in\n * either zone. Zones are created if they don't already exist.\n * Returns an error if a policy with the same name already exists.\n *\n * On is_add=false: detaches the policy from the zone-pair table,\n * frees its rules, and removes it. Only policy_name is consulted.\n *\n * default_action values: 0=deny 1=permit 2=permit-stateful\n *                        3=permit-stateful-nat\n */"
+            }
+        ],
+        [
+            "sfw_policy_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
+            "sfw_policy_rule_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "string",
+                "policy_name",
+                64
+            ],
+            [
+                "u32",
+                "rule_index"
+            ],
+            [
+                "u8",
+                "action"
+            ],
+            [
+                "u8",
+                "address_family"
+            ],
+            [
+                "vl_api_prefix_t",
+                "src_prefix"
+            ],
+            [
+                "vl_api_prefix_t",
+                "dst_prefix"
+            ],
+            [
+                "u8",
+                "protocol"
+            ],
+            [
+                "u16",
+                "src_port_lo"
+            ],
+            [
+                "u16",
+                "src_port_hi"
+            ],
+            [
+                "u16",
+                "dst_port_lo"
+            ],
+            [
+                "u16",
+                "dst_port_hi"
+            ],
+            [
+                "u8",
+                "icmp_type"
+            ],
+            [
+                "u8",
+                "icmp_code"
+            ],
+            {
+                "crc": "0x2fa9c963",
+                "options": {},
+                "comment": "/** Insert or remove a rule within a policy.\n *\n * rule_index is the 0-based position in the policy's rule vector.\n * On add, the new rule is inserted at that position (existing\n * entries pushed down). If rule_index >= current length the rule\n * is appended.\n *\n * On delete only policy_name and rule_index are consulted.\n *\n * action values match sfw_action_t (see sfw_policy_add_del).\n * address_family: 0=any 1=ip4 2=ip6. Protocol 0 means \"any\";\n * icmp_type/icmp_code 255 means \"any\".\n */"
+            }
+        ],
+        [
+            "sfw_policy_rule_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
+            "sfw_nat_pool_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "vl_api_prefix_t",
+                "external_prefix"
+            ],
+            [
+                "vl_api_prefix_t",
+                "internal_prefix"
+            ],
+            [
+                "u8",
+                "mode"
+            ],
+            {
+                "crc": "0x104621ad",
+                "options": {},
+                "comment": "/** Create or delete a NAT pool (IPv4 only in the current plugin).\n *\n * external_prefix / internal_prefix are vl_api_prefix_t (so the\n * wire encoding matches other VPP APIs) but must be IPv4 \u2014 the\n * handler rejects IPv6 for now. mode is sfw_nat_mode_t:\n *   0 = deterministic\n *   1 = dynamic\n *\n * On delete the pool whose (external_prefix, internal_prefix)\n * pair matches exactly is removed; `mode` is ignored on delete.\n */"
+            }
+        ],
+        [
+            "sfw_nat_pool_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
+            "sfw_nat_static_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "vl_api_address_t",
+                "external_address"
+            ],
+            [
+                "vl_api_address_t",
+                "internal_address"
+            ],
+            [
+                "u8",
+                "protocol"
+            ],
+            [
+                "u16",
+                "external_port"
+            ],
+            [
+                "u16",
+                "internal_port"
+            ],
+            {
+                "crc": "0x1ea19567",
+                "options": {},
+                "comment": "/** Create or delete a static (DNAT) mapping.\n *\n * protocol = 0 means 1:1 IP-level mapping (no port translation);\n * nonzero is TCP (6) / UDP (17) with explicit ports. Addresses are\n * vl_api_address_t on the wire but must resolve to IPv4 \u2014 the\n * plugin's NAT path is IPv4-only today.\n *\n * On delete the mapping matching (external_address, protocol,\n * external_port) is removed.\n */"
+            }
+        ],
+        [
+            "sfw_nat_static_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
         ]
     ],
-    "unions": [],
+    "unions": [
+        [
+            "address_union",
+            [
+                "vl_api_ip4_address_t",
+                "ip4"
+            ],
+            [
+                "vl_api_ip6_address_t",
+                "ip6"
+            ]
+        ]
+    ],
     "enums": [
         [
             "if_status_flags",
@@ -268,6 +657,216 @@
             {
                 "enumtype": "u8"
             }
+        ],
+        [
+            "address_family",
+            [
+                "ADDRESS_IP4",
+                0
+            ],
+            [
+                "ADDRESS_IP6",
+                1
+            ],
+            {
+                "enumtype": "u8"
+            }
+        ],
+        [
+            "ip_feature_location",
+            [
+                "IP_API_FEATURE_INPUT",
+                0
+            ],
+            [
+                "IP_API_FEATURE_OUTPUT",
+                1
+            ],
+            [
+                "IP_API_FEATURE_LOCAL",
+                2
+            ],
+            [
+                "IP_API_FEATURE_PUNT",
+                3
+            ],
+            [
+                "IP_API_FEATURE_DROP",
+                4
+            ],
+            {
+                "enumtype": "u8"
+            }
+        ],
+        [
+            "ip_ecn",
+            [
+                "IP_API_ECN_NONE",
+                0
+            ],
+            [
+                "IP_API_ECN_ECT0",
+                1
+            ],
+            [
+                "IP_API_ECN_ECT1",
+                2
+            ],
+            [
+                "IP_API_ECN_CE",
+                3
+            ],
+            {
+                "enumtype": "u8"
+            }
+        ],
+        [
+            "ip_dscp",
+            [
+                "IP_API_DSCP_CS0",
+                0
+            ],
+            [
+                "IP_API_DSCP_CS1",
+                8
+            ],
+            [
+                "IP_API_DSCP_AF11",
+                10
+            ],
+            [
+                "IP_API_DSCP_AF12",
+                12
+            ],
+            [
+                "IP_API_DSCP_AF13",
+                14
+            ],
+            [
+                "IP_API_DSCP_CS2",
+                16
+            ],
+            [
+                "IP_API_DSCP_AF21",
+                18
+            ],
+            [
+                "IP_API_DSCP_AF22",
+                20
+            ],
+            [
+                "IP_API_DSCP_AF23",
+                22
+            ],
+            [
+                "IP_API_DSCP_CS3",
+                24
+            ],
+            [
+                "IP_API_DSCP_AF31",
+                26
+            ],
+            [
+                "IP_API_DSCP_AF32",
+                28
+            ],
+            [
+                "IP_API_DSCP_AF33",
+                30
+            ],
+            [
+                "IP_API_DSCP_CS4",
+                32
+            ],
+            [
+                "IP_API_DSCP_AF41",
+                34
+            ],
+            [
+                "IP_API_DSCP_AF42",
+                36
+            ],
+            [
+                "IP_API_DSCP_AF43",
+                38
+            ],
+            [
+                "IP_API_DSCP_CS5",
+                40
+            ],
+            [
+                "IP_API_DSCP_EF",
+                46
+            ],
+            [
+                "IP_API_DSCP_CS6",
+                48
+            ],
+            [
+                "IP_API_DSCP_CS7",
+                50
+            ],
+            {
+                "enumtype": "u8"
+            }
+        ],
+        [
+            "ip_proto",
+            [
+                "IP_API_PROTO_HOPOPT",
+                0
+            ],
+            [
+                "IP_API_PROTO_ICMP",
+                1
+            ],
+            [
+                "IP_API_PROTO_IGMP",
+                2
+            ],
+            [
+                "IP_API_PROTO_TCP",
+                6
+            ],
+            [
+                "IP_API_PROTO_UDP",
+                17
+            ],
+            [
+                "IP_API_PROTO_GRE",
+                47
+            ],
+            [
+                "IP_API_PROTO_ESP",
+                50
+            ],
+            [
+                "IP_API_PROTO_AH",
+                51
+            ],
+            [
+                "IP_API_PROTO_ICMP6",
+                58
+            ],
+            [
+                "IP_API_PROTO_EIGRP",
+                88
+            ],
+            [
+                "IP_API_PROTO_OSPF",
+                89
+            ],
+            [
+                "IP_API_PROTO_SCTP",
+                132
+            ],
+            [
+                "IP_API_PROTO_RESERVED",
+                255
+            ],
+            {
+                "enumtype": "u8"
+            }
         ]
     ],
     "enumflags": [],
@@ -277,19 +876,49 @@
         },
         "sfw_zone_interface_add_del": {
             "reply": "sfw_zone_interface_add_del_reply"
+        },
+        "sfw_policy_add_del": {
+            "reply": "sfw_policy_add_del_reply"
+        },
+        "sfw_policy_rule_add_del": {
+            "reply": "sfw_policy_rule_add_del_reply"
+        },
+        "sfw_nat_pool_add_del": {
+            "reply": "sfw_nat_pool_add_del_reply"
+        },
+        "sfw_nat_static_add_del": {
+            "reply": "sfw_nat_static_add_del_reply"
         }
     },
     "options": {
-        "version": "1.1.0"
+        "version": "1.2.0"
     },
     "aliases": {
         "interface_index": {
             "type": "u32"
+        },
+        "ip4_address": {
+            "type": "u8",
+            "length": 4
+        },
+        "ip6_address": {
+            "type": "u8",
+            "length": 16
+        },
+        "address_with_prefix": {
+            "type": "vl_api_prefix_t"
+        },
+        "ip4_address_with_prefix": {
+            "type": "vl_api_ip4_prefix_t"
+        },
+        "ip6_address_with_prefix": {
+            "type": "vl_api_ip6_prefix_t"
         }
     },
-    "vl_api_version": "0xc9b5921b",
+    "vl_api_version": "0xaa427f69",
     "imports": [
-        "vnet/interface_types.api"
+        "vnet/interface_types.api",
+        "vnet/ip/ip_types.api"
     ],
     "counters": [],
     "paths": []
