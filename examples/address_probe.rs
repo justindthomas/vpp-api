@@ -14,6 +14,7 @@ use vpp_api::generated::interface::*;
 use vpp_api::generated::ip::*;
 use vpp_api::generated::l2::*;
 use vpp_api::generated::lcp::*;
+use vpp_api::generated::sfw::*;
 use vpp_api::generated::vpe::*;
 use vpp_api::VppClient;
 
@@ -48,6 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "lcp_itf_pair_add_del_40482b80",
         "bridge_domain_add_del_v2_600b7170",
         "sw_interface_set_l2_bridge_d0678b13",
+        "sfw_enable_disable_3865946c",
+        "sfw_zone_interface_add_del_66c8cf1c",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -293,6 +296,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await?;
     assert_eq!(dp.retval, 0);
+
+    // SFW plugin: round-trip sfw_zone_interface_add_del on a scratch
+    // loopback. Requires the sfw plugin to be loaded.
+    println!("\nRound-tripping sfw_zone_interface_add_del...");
+    let lb: CreateLoopbackReply = client
+        .request(CreateLoopback { mac_address: [0; 6] })
+        .await?;
+    assert_eq!(lb.retval, 0);
+    let add: SfwZoneInterfaceAddDelReply = client
+        .request(SfwZoneInterfaceAddDel {
+            is_add: true,
+            sw_if_index: lb.sw_if_index,
+            zone_name: "probe-zone".to_string(),
+        })
+        .await?;
+    println!("  add retval = {}", add.retval);
+    let del: SfwZoneInterfaceAddDelReply = client
+        .request(SfwZoneInterfaceAddDel {
+            is_add: false,
+            sw_if_index: lb.sw_if_index,
+            zone_name: "probe-zone".to_string(),
+        })
+        .await?;
+    println!("  del retval = {}", del.retval);
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: lb.sw_if_index,
+        })
+        .await?;
 
     // Final control_ping to ensure connection is still healthy.
     let ping: ControlPingReply = client.request(ControlPing).await?;
