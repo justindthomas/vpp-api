@@ -16,6 +16,7 @@ pub mod ip;
 pub mod ip_neighbor;
 pub mod punt;
 pub mod dhcp;
+pub mod gre;
 pub mod l2;
 pub mod lcp;
 pub mod sfw;

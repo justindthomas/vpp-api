@@ -10,6 +10,7 @@
 //! (defaults to /run/vpp/core-api.sock)
 
 use vpp_api::generated::dhcp::*;
+use vpp_api::generated::gre::*;
 use vpp_api::generated::interface::*;
 use vpp_api::generated::ip::*;
 use vpp_api::generated::l2::*;
@@ -55,6 +56,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "sfw_policy_rule_add_del_2fa9c963",
         "sfw_nat_pool_add_del_104621ad",
         "sfw_nat_static_add_del_1ea19567",
+        "bridge_flags_1b0c5fbd",
+        "l2fib_add_del_eddda487",
+        "l2_interface_vlan_tag_rewrite_62cc0bbc",
+        "sw_interface_set_l2_xconnect_4fa28a85",
+        "bd_ip_mac_add_del_0257c869",
+        "gre_tunnel_add_del_a27d7f17",
     ] {
         match client.message_table().get(*name) {
             Some(id) => println!("  msg_id({}) = {}", name, id),
@@ -425,6 +432,174 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             sw_if_index: lb.sw_if_index,
         })
         .await?;
+
+    // --- Phase 2e-rest: bridge_flags / l2fib / vlan tag rewrite
+    // / xconnect / bd_ip_mac / GRE tunnel ---
+
+    println!("\nRound-tripping bridge_flags (disable learn, re-enable)...");
+    let bd: BridgeDomainAddDelV2Reply = client
+        .request(BridgeDomainAddDelV2::add(888))
+        .await?;
+    assert_eq!(bd.retval, 0);
+    let bf1: BridgeFlagsReply = client
+        .request(BridgeFlags {
+            bd_id: bd.bd_id,
+            is_set: false,
+            flags: BdFlags(BdFlags::LEARN),
+        })
+        .await?;
+    println!("  clear learn retval = {}", bf1.retval);
+    let bf2: BridgeFlagsReply = client
+        .request(BridgeFlags {
+            bd_id: bd.bd_id,
+            is_set: true,
+            flags: BdFlags(BdFlags::LEARN),
+        })
+        .await?;
+    println!("  set   learn retval = {}", bf2.retval);
+
+    println!("\nRound-tripping l2fib_add_del (static MAC into BD)...");
+    let lb_mem: CreateLoopbackReply = client
+        .request(CreateLoopback { mac_address: [0; 6] })
+        .await?;
+    let _: SwInterfaceSetL2BridgeReply = client
+        .request(SwInterfaceSetL2Bridge::attach(lb_mem.sw_if_index, bd.bd_id))
+        .await?;
+    let fib_add: L2fibAddDelReply = client
+        .request(L2fibAddDel {
+            mac: [0x02, 0, 0, 0, 0, 0xaa],
+            bd_id: bd.bd_id,
+            sw_if_index: lb_mem.sw_if_index,
+            is_add: true,
+            static_mac: true,
+            filter_mac: false,
+            bvi_mac: false,
+        })
+        .await?;
+    println!("  add retval = {}", fib_add.retval);
+    let fib_del: L2fibAddDelReply = client
+        .request(L2fibAddDel {
+            mac: [0x02, 0, 0, 0, 0, 0xaa],
+            bd_id: bd.bd_id,
+            sw_if_index: lb_mem.sw_if_index,
+            is_add: false,
+            static_mac: false,
+            filter_mac: false,
+            bvi_mac: false,
+        })
+        .await?;
+    println!("  del retval = {}", fib_del.retval);
+
+    println!("\nRound-tripping bd_ip_mac_add_del...");
+    let bim_add: BdIpMacAddDelReply = client
+        .request(BdIpMacAddDel::ipv4(
+            bd.bd_id,
+            [10, 0, 0, 1],
+            [0x02, 0, 0, 0, 0, 0xbb],
+            true,
+        ))
+        .await?;
+    println!("  add retval = {}", bim_add.retval);
+    let bim_del: BdIpMacAddDelReply = client
+        .request(BdIpMacAddDel::ipv4(
+            bd.bd_id,
+            [10, 0, 0, 1],
+            [0x02, 0, 0, 0, 0, 0xbb],
+            false,
+        ))
+        .await?;
+    println!("  del retval = {}", bim_del.retval);
+
+    // Detach the scratch member + delete the scratch BD + loopback.
+    let _: SwInterfaceSetL2BridgeReply = client
+        .request(SwInterfaceSetL2Bridge::detach(lb_mem.sw_if_index))
+        .await?;
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: lb_mem.sw_if_index,
+        })
+        .await?;
+    let _: BridgeDomainAddDelV2Reply = client
+        .request(BridgeDomainAddDelV2::del(bd.bd_id))
+        .await?;
+
+    println!("\nRound-tripping l2_interface_vlan_tag_rewrite...");
+    // Spin up a parent loopback + a VLAN sub-if to operate on.
+    let p: CreateLoopbackReply = client
+        .request(CreateLoopback { mac_address: [0; 6] })
+        .await?;
+    let s: CreateVlanSubifReply = client
+        .request(CreateVlanSubif {
+            sw_if_index: p.sw_if_index,
+            vlan_id: 555,
+        })
+        .await?;
+    let pop: L2InterfaceVlanTagRewriteReply = client
+        .request(L2InterfaceVlanTagRewrite::pop1(s.sw_if_index))
+        .await?;
+    println!("  pop1    retval = {}", pop.retval);
+    let off: L2InterfaceVlanTagRewriteReply = client
+        .request(L2InterfaceVlanTagRewrite::disable(s.sw_if_index))
+        .await?;
+    println!("  disable retval = {}", off.retval);
+    let _: DeleteSubifReply = client
+        .request(DeleteSubif {
+            sw_if_index: s.sw_if_index,
+        })
+        .await?;
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: p.sw_if_index,
+        })
+        .await?;
+
+    println!("\nRound-tripping sw_interface_set_l2_xconnect (rx↔tx)...");
+    let a: CreateLoopbackReply = client
+        .request(CreateLoopback { mac_address: [0; 6] })
+        .await?;
+    let b: CreateLoopbackReply = client
+        .request(CreateLoopback { mac_address: [0; 6] })
+        .await?;
+    let xab: SwInterfaceSetL2XconnectReply = client
+        .request(SwInterfaceSetL2Xconnect::enable(a.sw_if_index, b.sw_if_index))
+        .await?;
+    let xba: SwInterfaceSetL2XconnectReply = client
+        .request(SwInterfaceSetL2Xconnect::enable(b.sw_if_index, a.sw_if_index))
+        .await?;
+    println!("  a→b retval = {}  b→a retval = {}", xab.retval, xba.retval);
+    let _: SwInterfaceSetL2XconnectReply = client
+        .request(SwInterfaceSetL2Xconnect::disable(a.sw_if_index))
+        .await?;
+    let _: SwInterfaceSetL2XconnectReply = client
+        .request(SwInterfaceSetL2Xconnect::disable(b.sw_if_index))
+        .await?;
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: a.sw_if_index,
+        })
+        .await?;
+    let _: DeleteLoopbackReply = client
+        .request(DeleteLoopback {
+            sw_if_index: b.sw_if_index,
+        })
+        .await?;
+
+    println!("\nRound-tripping gre_tunnel_add_del...");
+    let g: GreTunnelAddDelReply = client
+        .request(GreTunnelAddDel {
+            is_add: true,
+            tunnel: GreTunnel::ipv4_l3(77, [198, 51, 100, 10], [203, 0, 113, 10]),
+        })
+        .await?;
+    println!("  add retval = {}  sw_if_index = {}", g.retval, g.sw_if_index);
+    assert_eq!(g.retval, 0, "gre add");
+    let gd: GreTunnelAddDelReply = client
+        .request(GreTunnelAddDel {
+            is_add: false,
+            tunnel: GreTunnel::ipv4_l3(77, [198, 51, 100, 10], [203, 0, 113, 10]),
+        })
+        .await?;
+    println!("  del retval = {}", gd.retval);
 
     // Final control_ping to ensure connection is still healthy.
     let ping: ControlPingReply = client.request(ControlPing).await?;
