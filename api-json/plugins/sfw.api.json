@@ -419,6 +419,112 @@
             }
         ],
         [
+            "sfw_nat64_pool_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "vl_api_prefix_t",
+                "external_prefix"
+            ],
+            [
+                "vl_api_prefix_t",
+                "nat64_prefix"
+            ],
+            {
+                "crc": "0x91fc12bc",
+                "options": {},
+                "comment": "/** Create or delete a stateful NAT64 pool (RFC 6146).\n *\n * external_prefix is an IPv4 prefix describing the pool of v4 source\n * addresses used on the v4 side of the translator. nat64_prefix is the\n * RFC 6052 prefix the translator synthesizes into v6 destinations;\n * nat64_prefix_len must be one of {32,40,48,56,64,96}.\n *\n * On delete the pool whose (external_prefix, nat64_prefix, length)\n * tuple matches exactly is removed. */"
+            }
+        ],
+        [
+            "sfw_nat64_pool_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
+            "sfw_pref64_advertise_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "vl_api_interface_index_t",
+                "sw_if_index"
+            ],
+            [
+                "vl_api_prefix_t",
+                "nat64_prefix"
+            ],
+            [
+                "u16",
+                "lifetime_sec"
+            ],
+            {
+                "crc": "0x3ce58737",
+                "options": {},
+                "comment": "/** Enable or disable RFC 8781 PREF64 Router Advertisement option.\n *\n * On is_add=true: RAs sent on sw_if_index will carry a PREF64 option\n * pointing at nat64_prefix with lifetime_sec. nat64_prefix must match\n * an existing NAT64 pool (otherwise the router would advertise a\n * prefix it doesn't actually translate). lifetime_sec == 0 selects a\n * sane default (1800s, clamped to the RFC 8781 maximum of 65528s).\n *\n * On is_add=false only sw_if_index is consulted. */"
+            }
+        ],
+        [
+            "sfw_pref64_advertise_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
             "sfw_nat_static_add_del",
             [
                 "u16",
@@ -885,6 +991,12 @@
         },
         "sfw_nat_pool_add_del": {
             "reply": "sfw_nat_pool_add_del_reply"
+        },
+        "sfw_nat64_pool_add_del": {
+            "reply": "sfw_nat64_pool_add_del_reply"
+        },
+        "sfw_pref64_advertise_add_del": {
+            "reply": "sfw_pref64_advertise_add_del_reply"
         },
         "sfw_nat_static_add_del": {
             "reply": "sfw_nat_static_add_del_reply"

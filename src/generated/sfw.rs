@@ -362,6 +362,114 @@ impl VppMessage for SfwNatPoolAddDelReply {
     }
 }
 
+/// Create or delete a stateful NAT64 pool (RFC 6146).
+///
+/// `external_prefix` is an IPv4 prefix describing the v4 source pool.
+/// `nat64_prefix` is the RFC 6052 IPv6 prefix the translator embeds
+/// IPv4 destinations into; its prefix length must be one of
+/// {32, 40, 48, 56, 64, 96}. On delete the (external_prefix,
+/// nat64_prefix, length) tuple must match exactly.
+///
+/// Wire layout:
+///   is_add: u8
+///   external_prefix: vl_api_prefix_t (18)
+///   nat64_prefix: vl_api_prefix_t (18)
+#[derive(Debug, Clone)]
+pub struct SfwNat64PoolAddDel {
+    pub is_add: bool,
+    pub external_prefix: Prefix,
+    pub nat64_prefix: Prefix,
+}
+
+impl VppMessage for SfwNat64PoolAddDel {
+    const NAME: &'static str = "sfw_nat64_pool_add_del";
+    const CRC: &'static str = "91fc12bc";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.is_add as u8);
+        self.external_prefix.encode(buf);
+        self.nat64_prefix.encode(buf);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sfw_nat64_pool_add_del is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SfwNat64PoolAddDelReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SfwNat64PoolAddDelReply {
+    const NAME: &'static str = "sfw_nat64_pool_add_del_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SfwNat64PoolAddDelReply { retval })
+    }
+}
+
+/// Enable or disable the RFC 8781 PREF64 RA option for an interface.
+///
+/// On `is_add=true`, RAs sent on `sw_if_index` carry a PREF64 option
+/// pointing at `nat64_prefix` with `lifetime_sec`. The advertised
+/// prefix MUST match an existing NAT64 pool (added via
+/// `SfwNat64PoolAddDel`) — VPP rejects orphan advertisements.
+/// `lifetime_sec == 0` selects sfw's default (1800s, RFC 8781 max
+/// 65528s).
+///
+/// Wire layout:
+///   is_add: u8
+///   sw_if_index: u32
+///   nat64_prefix: vl_api_prefix_t (18)
+///   lifetime_sec: u16
+#[derive(Debug, Clone)]
+pub struct SfwPref64AdvertiseAddDel {
+    pub is_add: bool,
+    pub sw_if_index: u32,
+    pub nat64_prefix: Prefix,
+    pub lifetime_sec: u16,
+}
+
+impl VppMessage for SfwPref64AdvertiseAddDel {
+    const NAME: &'static str = "sfw_pref64_advertise_add_del";
+    const CRC: &'static str = "3ce58737";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.is_add as u8);
+        put_u32(buf, self.sw_if_index);
+        self.nat64_prefix.encode(buf);
+        put_u16(buf, self.lifetime_sec);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sfw_pref64_advertise_add_del is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SfwPref64AdvertiseAddDelReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SfwPref64AdvertiseAddDelReply {
+    const NAME: &'static str = "sfw_pref64_advertise_add_del_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SfwPref64AdvertiseAddDelReply { retval })
+    }
+}
+
 /// Create or delete a static (DNAT) mapping.
 ///
 /// Wire layout:
