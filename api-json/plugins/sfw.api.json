@@ -525,6 +525,66 @@
             }
         ],
         [
+            "sfw_rdnss_advertise_add_del",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "client_index"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "bool",
+                "is_add"
+            ],
+            [
+                "vl_api_interface_index_t",
+                "sw_if_index"
+            ],
+            [
+                "u32",
+                "lifetime_sec"
+            ],
+            [
+                "u8",
+                "n_servers"
+            ],
+            [
+                "vl_api_ip6_address_t",
+                "servers",
+                4
+            ],
+            {
+                "crc": "0xf18e4946",
+                "options": {},
+                "comment": "/** Enable or disable RFC 8106 RDNSS RA option on an interface.\n *\n * On is_add=true the RA emitted on sw_if_index will carry an RDNSS\n * option listing the supplied IPv6 servers (1..4). lifetime_sec ==\n * 0 selects sfw's default (90s = 3 \u00d7 a 30s RA interval); 0xFFFFFFFF\n * means infinite per RFC 8106 \u00a75.1. servers MUST all be IPv6 and\n * only the first n_servers entries are read.\n *\n * VPP itself has no native RDNSS support \u2014 the option type is\n * declared in icmp46_packet.h but no builder/API exists. sfw owns\n * the entire path via the ip6_ra extra-option hook.\n *\n * On is_add=false only sw_if_index is consulted. */"
+            }
+        ],
+        [
+            "sfw_rdnss_advertise_add_del_reply",
+            [
+                "u16",
+                "_vl_msg_id"
+            ],
+            [
+                "u32",
+                "context"
+            ],
+            [
+                "i32",
+                "retval"
+            ],
+            {
+                "crc": "0xe8d4e804",
+                "options": {}
+            }
+        ],
+        [
             "sfw_nat_static_add_del",
             [
                 "u16",
@@ -998,6 +1058,9 @@
         "sfw_pref64_advertise_add_del": {
             "reply": "sfw_pref64_advertise_add_del_reply"
         },
+        "sfw_rdnss_advertise_add_del": {
+            "reply": "sfw_rdnss_advertise_add_del_reply"
+        },
         "sfw_nat_static_add_del": {
             "reply": "sfw_nat_static_add_del_reply"
         }
@@ -1027,7 +1090,7 @@
             "type": "vl_api_ip6_prefix_t"
         }
     },
-    "vl_api_version": "0xaa427f69",
+    "vl_api_version": "0xef9beefc",
     "imports": [
         "vnet/interface_types.api",
         "vnet/ip/ip_types.api"

@@ -470,6 +470,62 @@ impl VppMessage for SfwPref64AdvertiseAddDelReply {
     }
 }
 
+/// Enable/disable RFC 8106 RDNSS RA option on an interface. VPP has
+/// no native RDNSS support — sfw owns the path via its ip6_ra
+/// extra-option hook.
+///
+/// Wire layout:
+///   is_add: u8
+///   sw_if_index: u32
+///   lifetime_sec: u32  (0 = sfw default 90s; 0xFFFFFFFF = infinite)
+///   n_servers: u8       (1..=4; trailing entries ignored)
+///   servers: [u8; 16] × 4   (vl_api_ip6_address_t, fixed-size array)
+#[derive(Debug, Clone)]
+pub struct SfwRdnssAdvertiseAddDel {
+    pub is_add: bool,
+    pub sw_if_index: u32,
+    pub lifetime_sec: u32,
+    pub n_servers: u8,
+    pub servers: [[u8; 16]; 4],
+}
+
+impl VppMessage for SfwRdnssAdvertiseAddDel {
+    const NAME: &'static str = "sfw_rdnss_advertise_add_del";
+    const CRC: &'static str = "f18e4946";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.is_add as u8);
+        put_u32(buf, self.sw_if_index);
+        put_u32(buf, self.lifetime_sec);
+        put_u8(buf, self.n_servers);
+        for s in &self.servers {
+            buf.extend_from_slice(s);
+        }
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sfw_rdnss_advertise_add_del is send-only".into()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SfwRdnssAdvertiseAddDelReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SfwRdnssAdvertiseAddDelReply {
+    const NAME: &'static str = "sfw_rdnss_advertise_add_del_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SfwRdnssAdvertiseAddDelReply { retval })
+    }
+}
+
 /// Create or delete a static (DNAT) mapping.
 ///
 /// Wire layout:
