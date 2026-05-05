@@ -18,9 +18,11 @@ pub mod codec;
 pub mod error;
 pub mod event;
 pub mod message;
+pub mod supervisor;
 
 pub mod generated;
 
 pub use client::VppClient;
 pub use error::VppError;
 pub use message::VppMessage;
+pub use supervisor::{VppLifecycle, VppSupervisor};

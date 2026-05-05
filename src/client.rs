@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use tokio::net::UnixStream;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex};
 
 use crate::codec;
 use crate::error::VppError;
@@ -35,6 +35,7 @@ pub struct VppClient {
     pending: Arc<Mutex<HashMap<u32, PendingReply>>>,
     event_tx: broadcast::Sender<VppEvent>,
     event_registry: Arc<Mutex<EventRegistry>>,
+    closed_rx: watch::Receiver<bool>,
     _reader_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -61,12 +62,14 @@ impl VppClient {
             Arc::new(Mutex::new(HashMap::new()));
         let (event_tx, _) = broadcast::channel(256);
         let event_registry = Arc::new(Mutex::new(EventRegistry::new()));
+        let (closed_tx, closed_rx) = watch::channel(false);
 
         let reader_handle = tokio::spawn(Self::reader_loop(
             read_half,
             pending.clone(),
             event_tx.clone(),
             event_registry.clone(),
+            closed_tx,
         ));
 
         Ok(VppClient {
@@ -78,8 +81,23 @@ impl VppClient {
             pending,
             event_tx,
             event_registry,
+            closed_rx,
             _reader_handle: reader_handle,
         })
+    }
+
+    /// A watch receiver that flips from `false` to `true` when the
+    /// underlying connection's reader loop exits — i.e. the VPP API
+    /// socket has gone away. Supervisors observe this to trigger a
+    /// reconnect.
+    pub fn closed_signal(&self) -> watch::Receiver<bool> {
+        self.closed_rx.clone()
+    }
+
+    /// True if the reader loop has exited (the VPP API socket is gone).
+    /// All in-flight and future RPCs on this client will fail.
+    pub fn is_closed(&self) -> bool {
+        *self.closed_rx.borrow()
     }
 
     /// Perform the initial handshake.
@@ -126,7 +144,12 @@ impl VppClient {
         pending: Arc<Mutex<HashMap<u32, PendingReply>>>,
         event_tx: broadcast::Sender<VppEvent>,
         event_registry: Arc<Mutex<EventRegistry>>,
+        closed_tx: watch::Sender<bool>,
     ) {
+        // On any exit path — clean EOF, read error, panic-free fallthrough —
+        // signal the supervisor that this connection is dead. Without this,
+        // RPCs would just hang on the pending-reply channel forever.
+        let _signal_close = ClosedGuard(closed_tx);
         loop {
             let frame = match read_frame_from_reader(&mut reader).await {
                 Ok(frame) => frame,
@@ -379,6 +402,18 @@ async fn read_frame_from_reader(
     })?;
 
     Ok(payload)
+}
+
+/// Drop guard that flips the watch sender to `true` when the reader
+/// loop exits, regardless of how it exits (clean EOF, read error,
+/// task cancellation). Supervisors await this transition to know
+/// the connection is dead and a reconnect is needed.
+struct ClosedGuard(watch::Sender<bool>);
+
+impl Drop for ClosedGuard {
+    fn drop(&mut self) {
+        let _ = self.0.send(true);
+    }
 }
 
 /// Write a frame to an OwnedWriteHalf.
