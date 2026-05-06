@@ -316,6 +316,99 @@ impl VppMessage for SwInterfaceSetFlagsReply {
     }
 }
 
+/// Move an interface into a different IPv4 or IPv6 FIB table (VRF).
+///
+/// **Side effect:** moving an interface to a new table clears any
+/// addresses currently assigned to it. Callers in impd order this
+/// before address-set so the desired addresses land directly in
+/// the target table without a redundant write/clear cycle.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceSetTable {
+    pub sw_if_index: u32,
+    pub is_ipv6: bool,
+    /// FIB table-id. 0 = default VRF.
+    pub vrf_id: u32,
+}
+
+impl VppMessage for SwInterfaceSetTable {
+    const NAME: &'static str = "sw_interface_set_table";
+    const CRC: &'static str = "df42a577";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u8(buf, self.is_ipv6 as u8);
+        put_u32(buf, self.vrf_id);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sw_interface_set_table is send-only".into()))
+    }
+}
+
+/// Reply to sw_interface_set_table.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceSetTableReply {
+    pub retval: i32,
+}
+
+impl VppMessage for SwInterfaceSetTableReply {
+    const NAME: &'static str = "sw_interface_set_table_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(SwInterfaceSetTableReply { retval })
+    }
+}
+
+/// Query the FIB table-id (VRF id) currently assigned to an
+/// interface. Used by ribd's connected-route seeder to tag
+/// connected routes with the right VRF.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceGetTable {
+    pub sw_if_index: u32,
+    pub is_ipv6: bool,
+}
+
+impl VppMessage for SwInterfaceGetTable {
+    const NAME: &'static str = "sw_interface_get_table";
+    const CRC: &'static str = "2d033de4";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_u8(buf, self.is_ipv6 as u8);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("sw_interface_get_table is send-only".into()))
+    }
+}
+
+/// Reply to sw_interface_get_table. Carries the FIB table-id
+/// assigned to the queried interface.
+#[derive(Debug, Clone)]
+pub struct SwInterfaceGetTableReply {
+    pub retval: i32,
+    pub vrf_id: u32,
+}
+
+impl VppMessage for SwInterfaceGetTableReply {
+    const NAME: &'static str = "sw_interface_get_table_reply";
+    const CRC: &'static str = "a6eb0109";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let vrf_id = get_u32(buf, &mut off)?;
+        Ok(SwInterfaceGetTableReply { retval, vrf_id })
+    }
+}
+
 /// Add or remove an IPv4/IPv6 address on an interface.
 ///
 /// Wire layout (after 10-byte request header):

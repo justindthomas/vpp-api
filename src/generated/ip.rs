@@ -316,6 +316,109 @@ pub struct IpTable {
     pub name: String,
 }
 
+/// Create or delete a FIB table.
+///
+/// VPP allows the same table to be added repeatedly (each `is_add=1`
+/// is a no-op after the first), but a table only needs to be deleted
+/// once. `table_id` 0 is the default VRF and must not be deleted.
+#[derive(Debug, Clone)]
+pub struct IpTableAddDel {
+    /// true = add, false = delete.
+    pub is_add: bool,
+    /// Table identity. `name` is a free-form label that surfaces in
+    /// `show ip fib summary`; it doesn't affect lookup.
+    pub table: IpTable,
+}
+
+impl VppMessage for IpTableAddDel {
+    const NAME: &'static str = "ip_table_add_del";
+    const CRC: &'static str = "0ffdaec0";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.is_add as u8);
+        // vl_api_ip_table_t: u32 table_id, bool is_ip6, string name[64]
+        put_u32(buf, self.table.table_id);
+        put_u8(buf, self.table.is_ip6 as u8);
+        let name_bytes = self.table.name.as_bytes();
+        let len = name_bytes.len().min(63);
+        let mut name_buf = [0u8; 64];
+        name_buf[..len].copy_from_slice(&name_bytes[..len]);
+        put_bytes(buf, &name_buf);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("ip_table_add_del is send-only".into()))
+    }
+}
+
+/// Reply to ip_table_add_del. Autoreply — only carries retval.
+#[derive(Debug, Clone)]
+pub struct IpTableAddDelReply {
+    pub retval: i32,
+}
+
+impl VppMessage for IpTableAddDelReply {
+    const NAME: &'static str = "ip_table_add_del_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(IpTableAddDelReply { retval })
+    }
+}
+
+/// Dump every FIB table currently present in VPP (both v4 and v6).
+/// Each table surfaces as one IpTableDetails reply.
+#[derive(Debug, Clone)]
+pub struct IpTableDump;
+
+impl VppMessage for IpTableDump {
+    const NAME: &'static str = "ip_table_dump";
+    const CRC: &'static str = "51077d14";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("ip_table_dump is send-only".into()))
+    }
+}
+
+/// One entry returned by ip_table_dump.
+#[derive(Debug, Clone)]
+pub struct IpTableDetails {
+    pub table: IpTable,
+}
+
+impl VppMessage for IpTableDetails {
+    const NAME: &'static str = "ip_table_details";
+    const CRC: &'static str = "c79fca0f";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let table_id = get_u32(buf, &mut off)?;
+        let is_ip6 = get_u8(buf, &mut off)? != 0;
+        // name: string[64] — fixed 64-byte NUL-padded
+        if buf.len() < off + 64 {
+            return Err(VppError::Decode("ip_table_details: short name".into()));
+        }
+        let name_bytes = &buf[off..off + 64];
+        let name_end = name_bytes.iter().position(|&b| b == 0).unwrap_or(64);
+        let name = String::from_utf8_lossy(&name_bytes[..name_end]).into_owned();
+        Ok(IpTableDetails {
+            table: IpTable {
+                table_id,
+                is_ip6,
+                name,
+            },
+        })
+    }
+}
+
 impl VppMessage for IpRouteDump {
     const NAME: &'static str = "ip_route_dump";
     const CRC: &'static str = "b9d2e09e";
