@@ -61,11 +61,14 @@ pub struct SfwZoneInterfaceAddDel {
     pub is_add: bool,
     pub sw_if_index: u32,
     pub zone_name: String,
+    /// Ingress VRF (carried for symmetry; zone membership itself is
+    /// VRF-independent because each interface lives in exactly one VRF).
+    pub table_id: u32,
 }
 
 impl VppMessage for SfwZoneInterfaceAddDel {
     const NAME: &'static str = "sfw_zone_interface_add_del";
-    const CRC: &'static str = "66c8cf1c";
+    const CRC: &'static str = "175770dd";
 
     fn encode_fields(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.is_add as u8);
@@ -75,6 +78,7 @@ impl VppMessage for SfwZoneInterfaceAddDel {
         let mut pad = [0u8; 32];
         pad[..len].copy_from_slice(&bytes[..len]);
         buf.extend_from_slice(&pad);
+        put_u32(buf, self.table_id);
     }
 
     fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
@@ -154,11 +158,13 @@ pub struct SfwPolicyAddDel {
     pub to_zone: String,
     pub default_action: SfwAction,
     pub implicit_icmpv6: bool,
+    /// Ingress VRF this policy applies in. 0 = default VRF.
+    pub table_id: u32,
 }
 
 impl VppMessage for SfwPolicyAddDel {
     const NAME: &'static str = "sfw_policy_add_del";
-    const CRC: &'static str = "bb931f93";
+    const CRC: &'static str = "894ab455";
 
     fn encode_fields(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.is_add as u8);
@@ -167,6 +173,7 @@ impl VppMessage for SfwPolicyAddDel {
         put_fixed_string(buf, &self.to_zone, 32);
         put_u8(buf, self.default_action as u8);
         put_u8(buf, self.implicit_icmpv6 as u8);
+        put_u32(buf, self.table_id);
     }
 
     fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
@@ -326,17 +333,20 @@ pub struct SfwNatPoolAddDel {
     pub external_prefix: Prefix,
     pub internal_prefix: Prefix,
     pub mode: SfwNatMode,
+    /// Ingress VRF this pool serves. 0 = default.
+    pub table_id: u32,
 }
 
 impl VppMessage for SfwNatPoolAddDel {
     const NAME: &'static str = "sfw_nat_pool_add_del";
-    const CRC: &'static str = "104621ad";
+    const CRC: &'static str = "b8a342c4";
 
     fn encode_fields(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.is_add as u8);
         self.external_prefix.encode(buf);
         self.internal_prefix.encode(buf);
         put_u8(buf, self.mode as u8);
+        put_u32(buf, self.table_id);
     }
 
     fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
@@ -379,16 +389,19 @@ pub struct SfwNat64PoolAddDel {
     pub is_add: bool,
     pub external_prefix: Prefix,
     pub nat64_prefix: Prefix,
+    /// Ingress VRF this pool serves. 0 = default.
+    pub table_id: u32,
 }
 
 impl VppMessage for SfwNat64PoolAddDel {
     const NAME: &'static str = "sfw_nat64_pool_add_del";
-    const CRC: &'static str = "91fc12bc";
+    const CRC: &'static str = "aaf5bb08";
 
     fn encode_fields(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.is_add as u8);
         self.external_prefix.encode(buf);
         self.nat64_prefix.encode(buf);
+        put_u32(buf, self.table_id);
     }
 
     fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
@@ -549,6 +562,8 @@ pub struct SfwNatStaticAddDel {
     pub protocol: u8,
     pub external_port: u16,
     pub internal_port: u16,
+    /// Ingress VRF this static serves. 0 = default.
+    pub table_id: u32,
 }
 
 impl SfwNatStaticAddDel {
@@ -566,13 +581,14 @@ impl SfwNatStaticAddDel {
             protocol: 0,
             external_port: 0,
             internal_port: 0,
+            table_id: 0,
         }
     }
 }
 
 impl VppMessage for SfwNatStaticAddDel {
     const NAME: &'static str = "sfw_nat_static_add_del";
-    const CRC: &'static str = "1ea19567";
+    const CRC: &'static str = "22625cc9";
 
     fn encode_fields(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.is_add as u8);
@@ -583,6 +599,7 @@ impl VppMessage for SfwNatStaticAddDel {
         put_u8(buf, self.protocol);
         put_u16(buf, self.external_port);
         put_u16(buf, self.internal_port);
+        put_u32(buf, self.table_id);
     }
 
     fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {

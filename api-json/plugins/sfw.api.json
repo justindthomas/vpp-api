@@ -176,10 +176,14 @@
                 "zone_name",
                 32
             ],
+            [
+                "u32",
+                "table_id"
+            ],
             {
-                "crc": "0x66c8cf1c",
+                "crc": "0x175770dd",
                 "options": {},
-                "comment": "/** Add or remove an interface from a named zone. The zone is\n * created on first use (sfw_zone_find_or_create) when is_add=true.\n * On is_add=false the interface is removed from its current zone\n * (no-op if it wasn't in one).\n */"
+                "comment": "/** Add or remove an interface from a named zone. The zone is\n * created on first use (sfw_zone_find_or_create) when is_add=true.\n * On is_add=false the interface is removed from its current zone\n * (no-op if it wasn't in one).\n *\n * table_id is informational on this RPC: zone membership itself is\n * VRF-independent (an interface lives in exactly one VRF, so its\n * zone always implies that VRF). Carried for future symmetry with\n * the policy / pool messages.\n */"
             }
         ],
         [
@@ -242,8 +246,12 @@
                 "bool",
                 "implicit_icmpv6"
             ],
+            [
+                "u32",
+                "table_id"
+            ],
             {
-                "crc": "0xbb931f93",
+                "crc": "0x894ab455",
                 "options": {},
                 "comment": "/** Create or delete a policy.\n *\n * On is_add=true: creates a new policy with the given zones and\n * default action. The policy is wired into the zone-pair table\n * and the feature arc is enabled on every interface already in\n * either zone. Zones are created if they don't already exist.\n * Returns an error if a policy with the same name already exists.\n *\n * On is_add=false: detaches the policy from the zone-pair table,\n * frees its rules, and removes it. Only policy_name is consulted.\n *\n * default_action values: 0=deny 1=permit 2=permit-stateful\n *                        3=permit-stateful-nat\n */"
             }
@@ -393,8 +401,12 @@
                 "u8",
                 "mode"
             ],
+            [
+                "u32",
+                "table_id"
+            ],
             {
-                "crc": "0x104621ad",
+                "crc": "0xb8a342c4",
                 "options": {},
                 "comment": "/** Create or delete a NAT pool (IPv4 only in the current plugin).\n *\n * external_prefix / internal_prefix are vl_api_prefix_t (so the\n * wire encoding matches other VPP APIs) but must be IPv4 \u2014 the\n * handler rejects IPv6 for now. mode is sfw_nat_mode_t:\n *   0 = deterministic\n *   1 = dynamic\n *\n * On delete the pool whose (external_prefix, internal_prefix)\n * pair matches exactly is removed; `mode` is ignored on delete.\n */"
             }
@@ -444,8 +456,12 @@
                 "vl_api_prefix_t",
                 "nat64_prefix"
             ],
+            [
+                "u32",
+                "table_id"
+            ],
             {
-                "crc": "0x91fc12bc",
+                "crc": "0xaaf5bb08",
                 "options": {},
                 "comment": "/** Create or delete a stateful NAT64 pool (RFC 6146).\n *\n * external_prefix is an IPv4 prefix describing the pool of v4 source\n * addresses used on the v4 side of the translator. nat64_prefix is the\n * RFC 6052 prefix the translator synthesizes into v6 destinations;\n * nat64_prefix_len must be one of {32,40,48,56,64,96}.\n *\n * On delete the pool whose (external_prefix, nat64_prefix, length)\n * tuple matches exactly is removed. */"
             }
@@ -502,7 +518,7 @@
             {
                 "crc": "0x3ce58737",
                 "options": {},
-                "comment": "/** Enable or disable RFC 8781 PREF64 Router Advertisement option.\n *\n * On is_add=true: RAs sent on sw_if_index will carry a PREF64 option\n * pointing at nat64_prefix with lifetime_sec. nat64_prefix must match\n * an existing NAT64 pool (otherwise the router would advertise a\n * prefix it doesn't actually translate). lifetime_sec == 0 selects a\n * sane default (1800s, clamped to the RFC 8781 maximum of 65528s).\n *\n * On is_add=false only sw_if_index is consulted. */"
+                "comment": "/** Enable or disable RFC 8781 PREF64 Router Advertisement option.\n *\n * On is_add=true: RAs sent on sw_if_index will carry a PREF64 option\n * pointing at nat64_prefix with lifetime_sec. nat64_prefix must match\n * an existing NAT64 pool (otherwise the router would advertise a\n * prefix it doesn't actually translate). lifetime_sec == 0 selects a\n * sane default (600s \u2014 \u2264 3 \u00d7 VPP's default MaxRtrAdvInterval=200s\n * per RFC 8781 \u00a74.1, and \u2264 a typical 600s router lifetime; clamped\n * to the RFC 8781 maximum of 65528s).\n *\n * On is_add=false only sw_if_index is consulted. */"
             }
         ],
         [
@@ -562,7 +578,7 @@
             {
                 "crc": "0xf18e4946",
                 "options": {},
-                "comment": "/** Enable or disable RFC 8106 RDNSS RA option on an interface.\n *\n * On is_add=true the RA emitted on sw_if_index will carry an RDNSS\n * option listing the supplied IPv6 servers (1..4). lifetime_sec ==\n * 0 selects sfw's default (90s = 3 \u00d7 a 30s RA interval); 0xFFFFFFFF\n * means infinite per RFC 8106 \u00a75.1. servers MUST all be IPv6 and\n * only the first n_servers entries are read.\n *\n * VPP itself has no native RDNSS support \u2014 the option type is\n * declared in icmp46_packet.h but no builder/API exists. sfw owns\n * the entire path via the ip6_ra extra-option hook.\n *\n * On is_add=false only sw_if_index is consulted. */"
+                "comment": "/** Enable or disable RFC 8106 RDNSS RA option on an interface.\n *\n * On is_add=true the RA emitted on sw_if_index will carry an RDNSS\n * option listing the supplied IPv6 servers (1..4). lifetime_sec ==\n * 0 selects sfw's default (600s \u2014 within RFC 8106 \u00a75.1's\n * [MaxRtrAdvInterval, 2 \u00d7 MaxRtrAdvInterval] band for typical\n * 200\u2013600s intervals, and well above the 180s floor that Android\n * 15+ enforces via accept_ra_min_lft); 0xFFFFFFFF means infinite.\n * servers MUST all be IPv6 and only the first n_servers entries\n * are read.\n *\n * VPP itself has no native RDNSS support \u2014 the option type is\n * declared in icmp46_packet.h but no builder/API exists. sfw owns\n * the entire path via the ip6_ra extra-option hook.\n *\n * On is_add=false only sw_if_index is consulted. */"
             }
         ],
         [
@@ -622,8 +638,12 @@
                 "u16",
                 "internal_port"
             ],
+            [
+                "u32",
+                "table_id"
+            ],
             {
-                "crc": "0x1ea19567",
+                "crc": "0x22625cc9",
                 "options": {},
                 "comment": "/** Create or delete a static (DNAT) mapping.\n *\n * protocol = 0 means 1:1 IP-level mapping (no port translation);\n * nonzero is TCP (6) / UDP (17) with explicit ports. Addresses are\n * vl_api_address_t on the wire but must resolve to IPv4 \u2014 the\n * plugin's NAT path is IPv4-only today.\n *\n * On delete the mapping matching (external_address, protocol,\n * external_port) is removed.\n */"
             }
@@ -1066,7 +1086,7 @@
         }
     },
     "options": {
-        "version": "1.2.0"
+        "version": "1.3.0"
     },
     "aliases": {
         "interface_index": {
@@ -1090,7 +1110,7 @@
             "type": "vl_api_ip6_prefix_t"
         }
     },
-    "vl_api_version": "0xef9beefc",
+    "vl_api_version": "0xf733e693",
     "imports": [
         "vnet/interface_types.api",
         "vnet/ip/ip_types.api"

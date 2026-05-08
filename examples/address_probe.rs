@@ -320,7 +320,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .request(SfwZoneInterfaceAddDel {
             is_add: true,
             sw_if_index: lb.sw_if_index,
-            zone_name: "probe-zone".to_string(),
+            zone_name: "probe-zone".to_string(),            table_id: 0,
         })
         .await?;
     println!("  zone add retval = {}", add.retval);
@@ -329,7 +329,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .request(SfwZoneInterfaceAddDel {
             is_add: true,
             sw_if_index: lb.sw_if_index,
-            zone_name: "probe-peer".to_string(),
+            zone_name: "probe-peer".to_string(),            table_id: 0,
         })
         .await?;
 
@@ -341,7 +341,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             from_zone: "probe-zone".to_string(),
             to_zone: "probe-peer".to_string(),
             default_action: SfwAction::Deny,
-            implicit_icmpv6: true,
+            implicit_icmpv6: true,            table_id: 0,
         })
         .await?;
     println!("  create retval = {}", pol.retval);
@@ -368,7 +368,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             from_zone: String::new(),
             to_zone: String::new(),
             default_action: SfwAction::Deny,
-            implicit_icmpv6: false,
+            implicit_icmpv6: false,            table_id: 0,
         })
         .await?;
     println!("  policy del retval = {}", pol_del.retval);
@@ -379,7 +379,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             is_add: true,
             external_prefix: Prefix::ipv4([203, 0, 113, 0], 28),
             internal_prefix: Prefix::ipv4([10, 77, 0, 0], 24),
-            mode: SfwNatMode::Dynamic,
+            mode: SfwNatMode::Dynamic,            table_id: 0,
         })
         .await?;
     println!("  pool add retval = {}", pool_add.retval);
@@ -389,7 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             is_add: false,
             external_prefix: Prefix::ipv4([203, 0, 113, 0], 28),
             internal_prefix: Prefix::ipv4([10, 77, 0, 0], 24),
-            mode: SfwNatMode::Dynamic,
+            mode: SfwNatMode::Dynamic,            table_id: 0,
         })
         .await?;
     println!("  pool del retval = {}", pool_del.retval);
@@ -417,14 +417,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .request(SfwZoneInterfaceAddDel {
             is_add: false,
             sw_if_index: lb.sw_if_index,
-            zone_name: "probe-zone".to_string(),
+            zone_name: "probe-zone".to_string(),            table_id: 0,
         })
         .await?;
     let _: SfwZoneInterfaceAddDelReply = client
         .request(SfwZoneInterfaceAddDel {
             is_add: false,
             sw_if_index: lb.sw_if_index,
-            zone_name: "probe-peer".to_string(),
+            zone_name: "probe-peer".to_string(),            table_id: 0,
         })
         .await?;
     let _: DeleteLoopbackReply = client
