@@ -1,0 +1,38 @@
+[package]
+name = "vpp-api-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.vpp-api]
+path = ".."
+
+# Standalone workspace so cargo doesn't try to inherit the parent.
+[workspace]
+
+[[bin]]
+name = "parse_reply_header"
+path = "fuzz_targets/parse_reply_header.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sockclnt_create_reply"
+path = "fuzz_targets/sockclnt_create_reply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ip_route_details"
+path = "fuzz_targets/ip_route_details.rs"
+test = false
+doc = false
+bench = false

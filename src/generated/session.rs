@@ -80,7 +80,9 @@ impl VppMessage for AppNamespaceAddDelV4 {
         // sock_name: string[0] — variable-length, prefixed by u32
         // length per VPP wire format.
         let sn = self.sock_name.as_bytes();
-        put_u32(buf, sn.len() as u32);
+        let sn_len = u32::try_from(sn.len())
+            .expect("app_namespace_add_del_v4: sock_name exceeds u32::MAX");
+        put_u32(buf, sn_len);
         put_bytes(buf, sn);
     }
 

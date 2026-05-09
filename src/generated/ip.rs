@@ -267,7 +267,13 @@ impl VppMessage for IpRouteAddDel {
         put_u32(buf, self.route.table_id);
         put_u32(buf, self.route.stats_index);
         self.route.prefix.encode(buf);
-        put_u8(buf, self.route.paths.len() as u8);
+        let n_paths = u8::try_from(self.route.paths.len()).unwrap_or_else(|_| {
+            panic!(
+                "ip_route_add_del: too many paths ({}); VPP n_paths is u8",
+                self.route.paths.len()
+            )
+        });
+        put_u8(buf, n_paths);
         for path in &self.route.paths {
             path.encode(buf);
         }

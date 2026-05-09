@@ -648,15 +648,17 @@ mod tests {
             is_add: true,
             sw_if_index: 7,
             zone_name: "external".to_string(),
+            table_id: 0,
         };
         let mut buf = Vec::new();
         msg.encode_fields(&mut buf);
-        // 1 (is_add) + 4 (sw_if_index) + 32 (zone_name) = 37
-        assert_eq!(buf.len(), 37);
+        // 1 (is_add) + 4 (sw_if_index) + 32 (zone_name) + 4 (table_id) = 41
+        assert_eq!(buf.len(), 41);
         assert_eq!(buf[0], 1);
         assert_eq!(&buf[1..5], &7u32.to_be_bytes());
         assert_eq!(&buf[5..13], b"external");
         assert!(buf[13..37].iter().all(|&b| b == 0));
+        assert_eq!(&buf[37..41], &0u32.to_be_bytes());
     }
 
     #[test]
@@ -668,18 +670,20 @@ mod tests {
             to_zone: "internal".to_string(),
             default_action: SfwAction::Deny,
             implicit_icmpv6: true,
+            table_id: 0,
         };
         let mut buf = Vec::new();
         msg.encode_fields(&mut buf);
         // 1 (is_add) + 64 (policy_name) + 32 (from) + 32 (to)
-        //   + 1 (default_action) + 1 (implicit_icmpv6) = 131
-        assert_eq!(buf.len(), 131);
+        //   + 1 (default_action) + 1 (implicit_icmpv6) + 4 (table_id) = 135
+        assert_eq!(buf.len(), 135);
         assert_eq!(buf[0], 1);
         assert_eq!(&buf[1..11], b"ext_to_int");
         assert_eq!(&buf[65..73], b"external");
         assert_eq!(&buf[97..105], b"internal");
         assert_eq!(buf[129], 0); // deny
         assert_eq!(buf[130], 1); // implicit_icmpv6
+        assert_eq!(&buf[131..135], &0u32.to_be_bytes());
     }
 
     #[test]
@@ -706,16 +710,18 @@ mod tests {
             external_prefix: Prefix::ipv4([203, 0, 113, 0], 24),
             internal_prefix: Prefix::ipv4([10, 0, 0, 0], 24),
             mode: SfwNatMode::Dynamic,
+            table_id: 0,
         };
         let mut buf = Vec::new();
         msg.encode_fields(&mut buf);
-        // 1 + 18 + 18 + 1 = 38
-        assert_eq!(buf.len(), 38);
+        // 1 + 18 + 18 + 1 + 4 (table_id) = 42
+        assert_eq!(buf.len(), 42);
         assert_eq!(buf[0], 1);
         assert_eq!(buf[1], 0); // v4
         assert_eq!(&buf[2..6], &[203, 0, 113, 0]);
         assert_eq!(buf[18], 24);
         assert_eq!(buf[37], 1); // dynamic
+        assert_eq!(&buf[38..42], &0u32.to_be_bytes());
     }
 
     #[test]
@@ -723,8 +729,8 @@ mod tests {
         let msg = SfwNatStaticAddDel::one_to_one_ipv4([198, 51, 100, 1], [192, 168, 1, 10], true);
         let mut buf = Vec::new();
         msg.encode_fields(&mut buf);
-        // 1 + 17 + 17 + 1 + 2 + 2 = 40
-        assert_eq!(buf.len(), 40);
+        // 1 + 17 + 17 + 1 + 2 + 2 + 4 (table_id) = 44
+        assert_eq!(buf.len(), 44);
         assert_eq!(buf[0], 1); // is_add
         assert_eq!(buf[1], 0); // ext af v4
         assert_eq!(&buf[2..6], &[198, 51, 100, 1]);
@@ -733,5 +739,6 @@ mod tests {
         assert_eq!(buf[35], 0); // protocol = 0 (1:1)
         assert_eq!(&buf[36..38], &0u16.to_be_bytes());
         assert_eq!(&buf[38..40], &0u16.to_be_bytes());
+        assert_eq!(&buf[40..44], &0u32.to_be_bytes());
     }
 }

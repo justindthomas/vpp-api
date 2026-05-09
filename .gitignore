@@ -1,2 +1,9 @@
 /target
 Cargo.lock
+.claude/audit.md
+
+# cargo-fuzz outputs
+/fuzz/target
+/fuzz/Cargo.lock
+/fuzz/corpus
+/fuzz/artifacts

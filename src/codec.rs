@@ -31,7 +31,8 @@ pub const REPLY_HEADER_SIZE: usize = 6;
 ///
 /// The payload should already contain [msg_id, client_index, context, fields...].
 pub fn encode_frame(payload: &[u8]) -> Vec<u8> {
-    let len = payload.len() as u32;
+    let len = u32::try_from(payload.len())
+        .expect("VPP frame payload exceeds u32::MAX — programming error");
     let mut frame = Vec::with_capacity(HEADER_SIZE + payload.len());
     // Bytes 0-3: msgctx (0)
     frame.extend_from_slice(&0u32.to_be_bytes());
