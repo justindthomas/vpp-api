@@ -13,6 +13,7 @@
 pub mod vpe;
 pub mod interface;
 pub mod ip;
+pub mod ip6_nd;
 pub mod ip_neighbor;
 pub mod punt;
 pub mod dhcp;
