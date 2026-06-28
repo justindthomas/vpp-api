@@ -308,6 +308,161 @@ impl VppMessage for IpRouteAddDelReply {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Multicast FIB programming — ip_mroute_add_del and its nested types.
+//
+// A consumer of link-local multicast (e.g. OSPFv3, which receives hellos on
+// ff02::5) needs an ip6 mfib entry so VPP delivers the group to the local
+// stack / a registered punt. IPv4 link-local groups are punted by default;
+// IPv6 ones are not.
+// ---------------------------------------------------------------------------
+
+/// mfib interface flags (`vl_api_mfib_itf_flags_t`) — a bitmask.
+pub const MFIB_ITF_FLAG_ACCEPT: u32 = 2;
+pub const MFIB_ITF_FLAG_FORWARD: u32 = 4;
+
+/// Multicast prefix (`vl_api_mprefix_t`): family, group-address length, and the
+/// group / source addresses (each a 16-byte address union; an all-zero source
+/// means the entry is `(*, G)`).
+#[derive(Debug, Clone)]
+pub struct Mprefix {
+    pub af: AddressFamily,
+    pub grp_address_length: u16,
+    pub grp_address: [u8; 16],
+    pub src_address: [u8; 16],
+}
+
+impl Mprefix {
+    /// `(*, G)` IPv6 group prefix at the given group-address length.
+    pub fn ipv6_group(grp: [u8; 16], grp_len: u16) -> Self {
+        Self {
+            af: AddressFamily::Ipv6,
+            grp_address_length: grp_len,
+            grp_address: grp,
+            src_address: [0u8; 16],
+        }
+    }
+
+    pub fn encode(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.af as u8);
+        put_u16(buf, self.grp_address_length);
+        put_bytes(buf, &self.grp_address);
+        put_bytes(buf, &self.src_address);
+    }
+}
+
+/// One path of a multicast route (`vl_api_mfib_path_t`): mfib interface flags
+/// plus an underlying fib path.
+#[derive(Debug, Clone)]
+pub struct MfibPath {
+    pub itf_flags: u32,
+    pub path: FibPath,
+}
+
+impl MfibPath {
+    /// Local-receive path: deliver matching multicast to the local stack so a
+    /// registered punt sees it.
+    pub fn local_receive_ipv6() -> Self {
+        Self {
+            itf_flags: MFIB_ITF_FLAG_FORWARD,
+            path: FibPath {
+                path_type: FibPathType::Local as u32,
+                proto: FibPathNhProto::Ip6 as u32,
+                ..FibPath::default()
+            },
+        }
+    }
+
+    /// RPF-accept path: accept matching multicast arriving on `sw_if_index`.
+    pub fn accept_ipv6(sw_if_index: u32) -> Self {
+        Self {
+            itf_flags: MFIB_ITF_FLAG_ACCEPT,
+            path: FibPath {
+                sw_if_index,
+                path_type: FibPathType::Normal as u32,
+                proto: FibPathNhProto::Ip6 as u32,
+                ..FibPath::default()
+            },
+        }
+    }
+
+    pub fn encode(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.itf_flags);
+        self.path.encode(buf);
+    }
+}
+
+/// A multicast route (`vl_api_ip_mroute_t`): prefix + mfib paths.
+#[derive(Debug, Clone)]
+pub struct IpMroute {
+    pub table_id: u32,
+    pub entry_flags: u32,
+    pub rpf_id: u32,
+    pub prefix: Mprefix,
+    pub paths: Vec<MfibPath>,
+}
+
+/// Add / delete a multicast route (`ip_mroute_add_del`). Deletions are
+/// per-path; routes can be entered repeatedly to add multiple paths.
+#[derive(Debug, Clone)]
+pub struct IpMrouteAddDel {
+    pub is_add: bool,
+    pub is_multipath: bool,
+    pub route: IpMroute,
+}
+
+impl VppMessage for IpMrouteAddDel {
+    const NAME: &'static str = "ip_mroute_add_del";
+    const CRC: &'static str = "0dd7e790";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u8(buf, self.is_add as u8);
+        put_u8(buf, self.is_multipath as u8);
+        put_u32(buf, self.route.table_id);
+        put_u32(buf, self.route.entry_flags);
+        put_u32(buf, self.route.rpf_id);
+        self.route.prefix.encode(buf);
+        let n_paths = u8::try_from(self.route.paths.len()).unwrap_or_else(|_| {
+            panic!(
+                "ip_mroute_add_del: too many paths ({}); VPP n_paths is u8",
+                self.route.paths.len()
+            )
+        });
+        put_u8(buf, n_paths);
+        for path in &self.route.paths {
+            path.encode(buf);
+        }
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode("ip_mroute_add_del is send-only".into()))
+    }
+}
+
+/// Reply to `ip_mroute_add_del`.
+#[derive(Debug, Clone)]
+pub struct IpMrouteAddDelReply {
+    pub retval: i32,
+    pub stats_index: u32,
+}
+
+impl VppMessage for IpMrouteAddDelReply {
+    const NAME: &'static str = "ip_mroute_add_del_reply";
+    const CRC: &'static str = "1992deab";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        let stats_index = get_u32(buf, &mut off)?;
+        Ok(IpMrouteAddDelReply {
+            retval,
+            stats_index,
+        })
+    }
+}
+
 /// Dump IP routes from a FIB table.
 #[derive(Debug, Clone)]
 pub struct IpRouteDump {
