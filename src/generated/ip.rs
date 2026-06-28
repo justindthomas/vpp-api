@@ -343,6 +343,19 @@ impl Mprefix {
         }
     }
 
+    /// `(*, G)` IPv4 group prefix at the given group-address length. The
+    /// 4-byte group is left-aligned in the 16-byte address field.
+    pub fn ipv4_group(grp: [u8; 4], grp_len: u16) -> Self {
+        let mut grp_address = [0u8; 16];
+        grp_address[..4].copy_from_slice(&grp);
+        Self {
+            af: AddressFamily::Ipv4,
+            grp_address_length: grp_len,
+            grp_address,
+            src_address: [0u8; 16],
+        }
+    }
+
     pub fn encode(&self, buf: &mut Vec<u8>) {
         put_u8(buf, self.af as u8);
         put_u16(buf, self.grp_address_length);
@@ -381,6 +394,32 @@ impl MfibPath {
                 sw_if_index,
                 path_type: FibPathType::Normal as u32,
                 proto: FibPathNhProto::Ip6 as u32,
+                ..FibPath::default()
+            },
+        }
+    }
+
+    /// IPv4 local-receive path: deliver matching multicast (224.0.0.5/6)
+    /// to the local stack so a registered punt sees it.
+    pub fn local_receive_ipv4() -> Self {
+        Self {
+            itf_flags: MFIB_ITF_FLAG_FORWARD,
+            path: FibPath {
+                path_type: FibPathType::Local as u32,
+                proto: FibPathNhProto::Ip4 as u32,
+                ..FibPath::default()
+            },
+        }
+    }
+
+    /// IPv4 RPF-accept path: accept matching multicast arriving on `sw_if_index`.
+    pub fn accept_ipv4(sw_if_index: u32) -> Self {
+        Self {
+            itf_flags: MFIB_ITF_FLAG_ACCEPT,
+            path: FibPath {
+                sw_if_index,
+                path_type: FibPathType::Normal as u32,
+                proto: FibPathNhProto::Ip4 as u32,
                 ..FibPath::default()
             },
         }
