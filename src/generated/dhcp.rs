@@ -142,6 +142,114 @@ impl VppMessage for Dhcp6ClientEnableDisableReply {
     }
 }
 
+// ---------------------------------------------------------------------------
+// DHCPv6 prefix-delegation (dhcp6_pd_client_cp plugin).
+// ---------------------------------------------------------------------------
+
+#[inline]
+fn put_string64(buf: &mut Vec<u8>, s: &str) {
+    let bytes = s.as_bytes();
+    let n = bytes.len().min(63);
+    let mut fixed = [0u8; 64];
+    fixed[..n].copy_from_slice(&bytes[..n]);
+    put_bytes(buf, &fixed);
+}
+
+/// Enable/disable the DHCPv6-PD client on an interface, binding it to a named
+/// prefix group (the upstream side — requests a delegated prefix).
+#[derive(Debug, Clone)]
+pub struct Dhcp6PdClientEnableDisable {
+    pub sw_if_index: u32,
+    pub prefix_group: String,
+    pub enable: bool,
+}
+
+impl VppMessage for Dhcp6PdClientEnableDisable {
+    const NAME: &'static str = "dhcp6_pd_client_enable_disable";
+    const CRC: &'static str = "a75a0772";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_string64(buf, &self.prefix_group);
+        put_u8(buf, self.enable as u8);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode(
+            "dhcp6_pd_client_enable_disable is send-only".into(),
+        ))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Dhcp6PdClientEnableDisableReply {
+    pub retval: i32,
+}
+
+impl VppMessage for Dhcp6PdClientEnableDisableReply {
+    const NAME: &'static str = "dhcp6_pd_client_enable_disable_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(Dhcp6PdClientEnableDisableReply { retval })
+    }
+}
+
+/// Add/remove an IPv6 address on an interface, formed from a delegated prefix
+/// (named prefix group) plus a host suffix (the downstream/LAN side).
+#[derive(Debug, Clone)]
+pub struct Ip6AddDelAddressUsingPrefix {
+    pub sw_if_index: u32,
+    pub prefix_group: String,
+    /// Suffix address (16 bytes); the low bits are OR'd onto the delegated
+    /// prefix. `prefix_len` is the delegated prefix length.
+    pub address: [u8; 16],
+    pub prefix_len: u8,
+    pub is_add: bool,
+}
+
+impl VppMessage for Ip6AddDelAddressUsingPrefix {
+    const NAME: &'static str = "ip6_add_del_address_using_prefix";
+    const CRC: &'static str = "3982f30a";
+
+    fn encode_fields(&self, buf: &mut Vec<u8>) {
+        put_u32(buf, self.sw_if_index);
+        put_string64(buf, &self.prefix_group);
+        // ip6_address_with_prefix = ip6_prefix: address(16) + len(u8)
+        put_bytes(buf, &self.address);
+        put_u8(buf, self.prefix_len);
+        put_u8(buf, self.is_add as u8);
+    }
+
+    fn decode_fields(_buf: &[u8]) -> Result<Self, VppError> {
+        Err(VppError::Decode(
+            "ip6_add_del_address_using_prefix is send-only".into(),
+        ))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Ip6AddDelAddressUsingPrefixReply {
+    pub retval: i32,
+}
+
+impl VppMessage for Ip6AddDelAddressUsingPrefixReply {
+    const NAME: &'static str = "ip6_add_del_address_using_prefix_reply";
+    const CRC: &'static str = "e8d4e804";
+
+    fn encode_fields(&self, _buf: &mut Vec<u8>) {}
+
+    fn decode_fields(buf: &[u8]) -> Result<Self, VppError> {
+        let mut off = 0;
+        let retval = get_i32(buf, &mut off)?;
+        Ok(Ip6AddDelAddressUsingPrefixReply { retval })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
