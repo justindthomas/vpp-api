@@ -165,3 +165,55 @@ impl VppMessage for PuntSocketDeregisterReply {
         Ok(PuntSocketDeregisterReply { retval })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn punt_socket_register_encodes_ospf_ip_proto() {
+        // OSPF-over-GRE-via-punt registration. punt_t is type(u32) +
+        // union(4): IpProto carries af(u8)+protocol(u8)+pad(u16). The
+        // enum value matters — L4=0/IpProto=1/Exception=2, not 1/2/3.
+        let msg = PuntSocketRegister {
+            header_version: 1,
+            punt_type: PuntType::IpProto,
+            af: 0,
+            protocol: 89, // OSPF
+            port: 0,
+            pathname: "/run/ospfd-punt.sock".to_string(),
+        };
+        let mut buf = Vec::new();
+        msg.encode_fields(&mut buf);
+        assert_eq!(buf.len(), 4 + 8 + 108, "header_version + punt_t + pathname[108]");
+        assert_eq!(&buf[0..4], &1u32.to_be_bytes(), "header_version");
+        assert_eq!(
+            &buf[4..8],
+            &(PuntType::IpProto as u32).to_be_bytes(),
+            "punt type (IpProto == 1)"
+        );
+        assert_eq!(buf[8], 0, "af");
+        assert_eq!(buf[9], 89, "ip protocol (OSPF)");
+        let path = b"/run/ospfd-punt.sock";
+        assert_eq!(&buf[12..12 + path.len()], path, "pathname");
+        assert!(
+            buf[12 + path.len()..].iter().all(|&b| b == 0),
+            "pathname NUL-padded to 108"
+        );
+    }
+
+    #[test]
+    fn punt_socket_register_reply_decodes_tx_pathname() {
+        // The reply hands ospfd VPP's TX socket path out of pathname[108].
+        // An off-by-one in the 108-byte field = ospfd can't send LSAs.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&0i32.to_be_bytes()); // retval
+        let path = b"/run/vpp/punt-tx.sock";
+        let mut path_buf = [0u8; 108];
+        path_buf[..path.len()].copy_from_slice(path);
+        buf.extend_from_slice(&path_buf);
+        let reply = PuntSocketRegisterReply::decode_fields(&buf).unwrap();
+        assert_eq!(reply.retval, 0);
+        assert_eq!(reply.pathname, "/run/vpp/punt-tx.sock");
+    }
+}

@@ -848,6 +848,50 @@ mod tests {
     }
 
     #[test]
+    fn test_prefix_ipv6_roundtrip() {
+        // v6 is the bulk of what ospfd/ribd push; only v4 had a round-trip.
+        let addr = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        let prefix = Prefix::ipv6(addr, 64);
+        let mut buf = Vec::new();
+        prefix.encode(&mut buf);
+        let mut off = 0;
+        let decoded = Prefix::decode(&buf, &mut off).unwrap();
+        assert_eq!(decoded.af, AddressFamily::Ipv6);
+        assert_eq!(decoded.address, addr);
+        assert_eq!(decoded.len, 64);
+    }
+
+    #[test]
+    fn test_fib_path_via_ipv6() {
+        let addr = [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        let path = FibPath::via_ipv6(addr, 7);
+        assert_eq!(path.nh_addr, addr);
+        assert_eq!(path.sw_if_index, 7);
+        assert_eq!(path.weight, 1);
+    }
+
+    #[test]
+    fn test_mprefix_encode_field_order() {
+        // The u16 grp_address_length sits BETWEEN the 1-byte af and the
+        // two 16-byte address unions. A wrong offset here corrupts the
+        // (*,G) mfib that OSPF-over-GRE-via-punt programs (224.0.0.5/6,
+        // ff02::5/6) yet would still let test_18's adjacency form — and
+        // the crate's own cargo test stays green. Pin the byte layout.
+        let grp = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5];
+        let mut buf = Vec::new();
+        Mprefix::ipv6_group(grp, 128).encode(&mut buf);
+        assert_eq!(buf.len(), 1 + 2 + 16 + 16, "Mprefix wire length");
+        assert_eq!(buf[0], AddressFamily::Ipv6 as u8, "af byte is first");
+        assert_eq!(
+            &buf[1..3],
+            &128u16.to_be_bytes(),
+            "grp_address_length (BE u16) follows af"
+        );
+        assert_eq!(&buf[3..19], &grp, "grp_address follows the length");
+        assert_eq!(&buf[19..35], &[0u8; 16], "src_address (unspecified for *,G)");
+    }
+
+    #[test]
     fn test_sw_interface_ip6_enable_disable_encode() {
         let msg = SwInterfaceIp6EnableDisable {
             sw_if_index: 4,
