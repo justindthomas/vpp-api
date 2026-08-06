@@ -22,3 +22,4 @@ pub mod l2;
 pub mod lcp;
 pub mod sfw;
 pub mod session;
+pub mod wireguard;
